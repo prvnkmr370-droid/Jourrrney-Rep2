@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: jourrrney-backend
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      # Render generates a real random value for this on first deploy —
+      # replaces the insecure "dev-only-secret-change-me" fallback in code.
+      - key: JWT_SECRET
+        generateValue: true
+      # Left as non-production for now so /auth/request-code still returns
+      # devCode in its response — there's no real email provider wired up
+      # yet, so this is the only way to actually sign in until one is
+      # added. Flip to "production" once real email delivery exists.
+      - key: NODE_ENV
+        value: development

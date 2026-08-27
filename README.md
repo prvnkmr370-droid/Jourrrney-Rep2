@@ -48,10 +48,17 @@ Both need to be up for sign-in to work.
 
 ## Deploying this for real
 
-Right now this only runs on your own Mac, reachable over your home Wi-Fi —
-fine for development, but your phone (and nobody else) can only reach it
-while your Mac is on, awake, and on the same network. To make it reachable
-from anywhere, you'd deploy it to a host (Render, Railway, Fly.io, a VPS,
-etc.), point `EXPO_PUBLIC_API_URL` at that public URL, and swap SQLite for
-a hosted database if you expect real concurrent traffic. Say the word when
-you're ready for that step and I can help you set it up.
+Deployed on [Render](https://render.com) via `render.yaml` (a "Blueprint" —
+Render reads this file and configures the service automatically). See the
+walkthrough that came with this change for the exact steps.
+
+**Known limitation on Render's free tier: the SQLite file (`data.sqlite`)
+does not survive a redeploy.** Free web services there don't include
+persistent disk storage, so every account created lives only until the
+next deploy or restart wipes the container's filesystem. Fine for
+continuing to test the deploy pipeline and the auth flow itself; not fine
+for real users who expect their account to still exist next week. Fixing
+that means either paying for Render's persistent disk add-on, or swapping
+SQLite for a real hosted database (Render/Supabase/Neon all have free
+Postgres tiers) — ask to do that whenever you're ready to move past
+testing.
