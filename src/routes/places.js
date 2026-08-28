@@ -16,7 +16,17 @@ const db = require("../db");
 
 const router = express.Router();
 
-const OVERPASS_ENDPOINT = "https://overpass-api.de/api/interpreter";
+// Multiple public Overpass mirrors, tried in order — the main instance
+// (overpass-api.de) is known to hard-refuse connections from some cloud
+// hosting IP ranges (seen from Render's free tier in testing), so a
+// single-endpoint setup fails outright for those deployments. Falling
+// through to community mirrors keeps the feature working without needing
+// a paid Overpass/Google alternative.
+const OVERPASS_ENDPOINTS = [
+  "https://overpass-api.de/api/interpreter",
+  "https://overpass.kumi.systems/api/interpreter",
+  "https://overpass.private.coffee/api/interpreter",
+];
 const CACHE_TTL_DAYS = 30; // OSM POI data for tourist attractions barely churns — safe to hold onto for a while
 const DEFAULT_RADIUS_M = 10000;
 const MAX_RADIUS_M = 25000;
@@ -124,41 +134,58 @@ router.get("/", async (req, res) => {
   }
 
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-    // Overpass expects the query as a urlencoded `data` form field — a
-    // raw text/plain body gets rejected with 406 Not Acceptable. Its
-    // Apache front-end also 406s requests with no Accept/User-Agent
-    // header (Node's fetch sends neither by default), so both are set
-    // explicitly here.
-    const response = await fetch(OVERPASS_ENDPOINT, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "Accept": "*/*",
-        "User-Agent": "journey-backend/1.0 (jourrrney travel app; places lookup)",
-      },
-      body: `data=${encodeURIComponent(buildQuery(latNum, lonNum, radiusM))}`,
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
-    if (!response.ok) throw new Error(`Overpass responded ${response.status}`);
-    const data = await response.json();
+    const data = await queryOverpassWithFallback(buildQuery(latNum, lonNum, radiusM));
     const places = normalize(data.elements || [], latNum, lonNum);
     setCached(destinationId, places);
     return res.json({ places, source: "live" });
   } catch (err) {
-    const causeMsg = err.cause ? ` (${err.cause.code || err.cause.message || err.cause})` : "";
-    console.error("Overpass fetch failed:", err.message + causeMsg);
-    // The public Overpass instance is free but shared and occasionally
-    // rate-limits or times out — fall back to whatever's cached (even
-    // stale) rather than fail the request outright.
+    console.error("Overpass fetch failed on all mirrors:", err.message);
+    // The public Overpass instance(s) are free but shared and occasionally
+    // rate-limit, time out, or refuse connections from certain hosting IP
+    // ranges — fall back to whatever's cached (even stale) rather than
+    // fail the request outright.
     if (cached) return res.json({ places: cached.payload, source: "stale-cache" });
     // `detail` is just an upstream HTTP status/timeout message, not
     // sensitive — useful for diagnosing Overpass outages/rate-limits
     // without needing server log access.
-    return res.status(502).json({ error: "Could not fetch places right now — try again shortly", detail: err.message + causeMsg });
+    return res.status(502).json({ error: "Could not fetch places right now — try again shortly", detail: err.message });
   }
 });
+
+// Tries each Overpass mirror in turn, returning the first successful JSON
+// response. Throws (with all per-endpoint failures joined together) only
+// if every mirror fails.
+async function queryOverpassWithFallback(query) {
+  const failures = [];
+  for (const endpoint of OVERPASS_ENDPOINTS) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+    try {
+      // Overpass expects the query as a urlencoded `data` form field — a
+      // raw text/plain body gets rejected with 406 Not Acceptable. Its
+      // Apache front-end also 406s requests with no Accept/User-Agent
+      // header (Node's fetch sends neither by default), so both are set
+      // explicitly here.
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "Accept": "*/*",
+          "User-Agent": "journey-backend/1.0 (jourrrney travel app; places lookup)",
+        },
+        body: `data=${encodeURIComponent(query)}`,
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      if (!response.ok) throw new Error(`responded ${response.status}`);
+      return await response.json();
+    } catch (err) {
+      clearTimeout(timeout);
+      const causeMsg = err.cause ? ` (${err.cause.code || err.cause.message || err.cause})` : "";
+      failures.push(`${new URL(endpoint).hostname}: ${err.message}${causeMsg}`);
+    }
+  }
+  throw new Error(failures.join("; "));
+}
 
 module.exports = router;
