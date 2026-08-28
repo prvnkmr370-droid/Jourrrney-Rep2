@@ -1,8 +1,13 @@
 /**
- * Real profile persistence for signed-in users — bio, work, education,
- * languages, location. All optional/nullable; a brand-new account has
- * none of these set, and the app should show honest empty states rather
- * than any placeholder persona for real accounts.
+ * Real profile persistence for signed-in users — bio, languages,
+ * location. All optional/nullable; a brand-new account has none of these
+ * set, and the app should show honest empty states rather than any
+ * placeholder persona for real accounts.
+ *
+ * Work/Education were dropped (not relevant for a travel app) — the
+ * `work`/`education` columns still exist in the users table (see db.js)
+ * since dropping a SQLite column isn't worth the migration risk for two
+ * now-unused nullable fields, but nothing reads or writes them anymore.
  */
 const express = require("express");
 const db = require("../db");
@@ -10,7 +15,7 @@ const requireAuth = require("../middleware/requireAuth");
 
 const router = express.Router();
 
-const EDITABLE_FIELDS = ["bio", "work", "education", "languages", "location"];
+const EDITABLE_FIELDS = ["bio", "languages", "location"];
 const MAX_FIELD_LENGTH = 500;
 
 router.use(requireAuth);
@@ -18,7 +23,7 @@ router.use(requireAuth);
 // GET /profile
 router.get("/", (req, res) => {
   const user = db
-    .prepare("SELECT id, email, name, bio, work, education, languages, location FROM users WHERE id = ?")
+    .prepare("SELECT id, email, name, bio, languages, location FROM users WHERE id = ?")
     .get(req.userId);
   if (!user) return res.status(404).json({ error: "Account not found." });
   res.json({ profile: user });
@@ -44,7 +49,7 @@ router.patch("/", (req, res) => {
   db.prepare(`UPDATE users SET ${setClause} WHERE id = @id`).run({ ...updates, id: req.userId });
 
   const user = db
-    .prepare("SELECT id, email, name, bio, work, education, languages, location FROM users WHERE id = ?")
+    .prepare("SELECT id, email, name, bio, languages, location FROM users WHERE id = ?")
     .get(req.userId);
   res.json({ profile: user });
 });

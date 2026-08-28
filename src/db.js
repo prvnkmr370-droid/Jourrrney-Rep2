@@ -38,6 +38,11 @@ db.exec(`
 const existingColumns = new Set(db.prepare("PRAGMA table_info(users)").all().map((c) => c.name));
 const profileColumns = {
   bio: "TEXT",
+  // work/education: kept here (still created for a fresh DB) but no
+  // longer read or written by routes/profile.js — dropped as not
+  // relevant for a travel app. Left in the schema rather than migrated
+  // out, since dropping a SQLite column isn't worth the risk for two
+  // already-unused nullable fields.
   work: "TEXT",
   education: "TEXT",
   languages: "TEXT",
