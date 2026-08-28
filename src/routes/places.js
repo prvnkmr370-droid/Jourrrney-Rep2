@@ -148,7 +148,8 @@ router.get("/", async (req, res) => {
     setCached(destinationId, places);
     return res.json({ places, source: "live" });
   } catch (err) {
-    console.error("Overpass fetch failed:", err.message);
+    const causeMsg = err.cause ? ` (${err.cause.code || err.cause.message || err.cause})` : "";
+    console.error("Overpass fetch failed:", err.message + causeMsg);
     // The public Overpass instance is free but shared and occasionally
     // rate-limits or times out — fall back to whatever's cached (even
     // stale) rather than fail the request outright.
@@ -156,7 +157,7 @@ router.get("/", async (req, res) => {
     // `detail` is just an upstream HTTP status/timeout message, not
     // sensitive — useful for diagnosing Overpass outages/rate-limits
     // without needing server log access.
-    return res.status(502).json({ error: "Could not fetch places right now — try again shortly", detail: err.message });
+    return res.status(502).json({ error: "Could not fetch places right now — try again shortly", detail: err.message + causeMsg });
   }
 });
 
