@@ -47,6 +47,13 @@ const profileColumns = {
   education: "TEXT",
   languages: "TEXT",
   location: "TEXT",
+  // Named to match the app's TS field 1:1 (camelCase, not snake_case) —
+  // SQLite doesn't care about column-naming convention, and it keeps this
+  // one field simple to add to the generic EDITABLE_FIELDS loop in
+  // routes/profile.js without a translation layer. Value is one of
+  // "system" | "light" | "dark" (validated in profile.js, not here) —
+  // NULL means "no saved preference yet, follow local default (system)".
+  themeMode: "TEXT",
 };
 for (const [column, type] of Object.entries(profileColumns)) {
   if (!existingColumns.has(column)) {
