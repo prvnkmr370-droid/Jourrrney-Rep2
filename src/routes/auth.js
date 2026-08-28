@@ -17,10 +17,11 @@ const crypto = require("node:crypto");
 const jwt = require("jsonwebtoken");
 const express = require("express");
 const db = require("../db");
+const { JWT_SECRET } = require("../auth-config");
+const requireAuth = require("../middleware/requireAuth");
 
 const router = express.Router();
 
-const JWT_SECRET = process.env.JWT_SECRET || "dev-only-secret-change-me";
 const CODE_TTL_MINUTES = 10;
 const MAX_ATTEMPTS = 5;
 
@@ -94,19 +95,8 @@ router.post("/verify-code", (req, res) => {
 });
 
 // GET /auth/me — requires Authorization: Bearer <token>
-router.get("/me", (req, res) => {
-  const auth = req.headers.authorization || "";
-  const token = auth.startsWith("Bearer ") ? auth.slice(7) : null;
-  if (!token) return res.status(401).json({ error: "Not signed in." });
-
-  let payload;
-  try {
-    payload = jwt.verify(token, JWT_SECRET);
-  } catch {
-    return res.status(401).json({ error: "Session expired — sign in again." });
-  }
-
-  const user = db.prepare("SELECT id, email, name, created_at FROM users WHERE id = ?").get(payload.sub);
+router.get("/me", requireAuth, (req, res) => {
+  const user = db.prepare("SELECT id, email, name, created_at FROM users WHERE id = ?").get(req.userId);
   if (!user) return res.status(401).json({ error: "Account not found." });
   res.json({ user });
 });
