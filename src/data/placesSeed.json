@@ -1,0 +1,1013 @@
+{
+  "agra": [
+    {
+      "id": "node/7515256508",
+      "name": "Hathi Pol",
+      "category": "Attraction",
+      "lat": 27.1803739,
+      "lon": 78.0186461,
+      "distanceKm": 1.1,
+      "wikidata": null
+    },
+    {
+      "id": "way/310318567",
+      "name": "Agra Fort",
+      "category": "Historic Site",
+      "lat": 27.1798217,
+      "lon": 78.0210426,
+      "distanceKm": 1.3,
+      "wikidata": "Q171857"
+    },
+    {
+      "id": "node/10676100462",
+      "name": "Hauz-i-Jehangir",
+      "category": "Attraction",
+      "lat": 27.1776634,
+      "lon": 78.0225186,
+      "distanceKm": 1.4,
+      "wikidata": null
+    },
+    {
+      "id": "node/3533066370",
+      "name": "Jhansi Rani Laxmibhai Statue",
+      "category": "Historic Site",
+      "lat": 27.1635521,
+      "lon": 78.0038257,
+      "distanceKm": 1.5,
+      "wikidata": "Q659396"
+    },
+    {
+      "id": "node/3893485491",
+      "name": "Jahangir's Palace",
+      "category": "Attraction",
+      "lat": 27.177765,
+      "lon": 78.0231386,
+      "distanceKm": 1.5,
+      "wikidata": null
+    },
+    {
+      "id": "node/5931059706",
+      "name": "Angori Bagh",
+      "category": "Attraction",
+      "lat": 27.1784181,
+      "lon": 78.0230568,
+      "distanceKm": 1.5,
+      "wikidata": null
+    },
+    {
+      "id": "node/6134741352",
+      "name": "Roshanara",
+      "category": "Historic Site",
+      "lat": 27.178238,
+      "lon": 78.023578,
+      "distanceKm": 1.5,
+      "wikidata": null
+    },
+    {
+      "id": "node/6243460887",
+      "name": "Diwan-i-Khas",
+      "category": "Attraction",
+      "lat": 27.178897,
+      "lon": 78.0233646,
+      "distanceKm": 1.5,
+      "wikidata": null
+    },
+    {
+      "id": "node/6243483685",
+      "name": "Khas Mahal",
+      "category": "Attraction",
+      "lat": 27.1784677,
+      "lon": 78.0235623,
+      "distanceKm": 1.5,
+      "wikidata": null
+    },
+    {
+      "id": "node/10676068580",
+      "name": "Akhbari Mahal",
+      "category": "Attraction",
+      "lat": 27.1769871,
+      "lon": 78.023238,
+      "distanceKm": 1.5,
+      "wikidata": null
+    },
+    {
+      "id": "way/490103297",
+      "name": "Diwan-i-Aam",
+      "category": "Attraction",
+      "lat": 27.1789741,
+      "lon": 78.0225413,
+      "distanceKm": 1.5,
+      "wikidata": null
+    },
+    {
+      "id": "way/490321400",
+      "name": "Sheesh Mahal",
+      "category": "Attraction",
+      "lat": 27.1787596,
+      "lon": 78.023134,
+      "distanceKm": 1.5,
+      "wikidata": null
+    },
+    {
+      "id": "node/6655840089",
+      "name": "Musammun Burj",
+      "category": "Attraction",
+      "lat": 27.1788379,
+      "lon": 78.0236082,
+      "distanceKm": 1.6,
+      "wikidata": null
+    },
+    {
+      "id": "node/2340032986",
+      "name": "Jhalkaribai Statue",
+      "category": "Historic Site",
+      "lat": 27.1753047,
+      "lon": 78.0263372,
+      "distanceKm": 1.8,
+      "wikidata": "Q659396"
+    },
+    {
+      "id": "node/2653409047",
+      "name": "Shaheed Smarak",
+      "category": "Historic Site",
+      "lat": 27.1983897,
+      "lon": 78.0048416,
+      "distanceKm": 2.4,
+      "wikidata": null
+    },
+    {
+      "id": "node/12050783400",
+      "name": "Shaurya",
+      "category": "Historic Site",
+      "lat": 27.1596239,
+      "lon": 77.9920144,
+      "distanceKm": 2.5,
+      "wikidata": null
+    },
+    {
+      "id": "node/1468368074",
+      "name": "Chauburji",
+      "category": "Historic Site",
+      "lat": 27.1901207,
+      "lon": 78.0325617,
+      "distanceKm": 2.8,
+      "wikidata": null
+    },
+    {
+      "id": "way/50284165",
+      "name": "Tomb of Itimad ud Daulah",
+      "category": "Historic Site",
+      "lat": 27.1928089,
+      "lon": 78.0314329,
+      "distanceKm": 2.9,
+      "wikidata": null
+    },
+    {
+      "id": "way/378105192",
+      "name": "एतमाद-उद-दौला का मक़बरा",
+      "category": "Historic Site",
+      "lat": 27.1928678,
+      "lon": 78.0309945,
+      "distanceKm": 2.9,
+      "wikidata": "Q1318766"
+    },
+    {
+      "id": "node/4430094389",
+      "name": "ताज महल संग्रहालय",
+      "category": "Museum",
+      "lat": 27.1731379,
+      "lon": 78.0406323,
+      "distanceKm": 3.2,
+      "wikidata": null
+    }
+  ],
+  "jaipur": [
+    {
+      "id": "node/9867154017",
+      "name": "Amrapali Museum",
+      "category": "Museum",
+      "lat": 26.9150126,
+      "lon": 75.8019066,
+      "distanceKm": 1.5,
+      "wikidata": null
+    },
+    {
+      "id": "way/862568914",
+      "name": "Shaheed Smarak",
+      "category": "Historic Site",
+      "lat": 26.9174202,
+      "lon": 75.8017635,
+      "distanceKm": 1.5,
+      "wikidata": null
+    },
+    {
+      "id": "node/957757380",
+      "name": "Sawai Jai Singh II",
+      "category": "Landmark",
+      "lat": 26.9075663,
+      "lon": 75.8054827,
+      "distanceKm": 1.9,
+      "wikidata": null
+    },
+    {
+      "id": "node/1466911308",
+      "name": "Juneja Art Gallery",
+      "category": "Landmark",
+      "lat": 26.9164069,
+      "lon": 75.8059564,
+      "distanceKm": 1.9,
+      "wikidata": null
+    },
+    {
+      "id": "node/6081535814",
+      "name": "Paanch Batti",
+      "category": "Historic Site",
+      "lat": 26.9162485,
+      "lon": 75.8098572,
+      "distanceKm": 2.3,
+      "wikidata": null
+    },
+    {
+      "id": "node/14055799382",
+      "name": "Pump House Museum & Cafe",
+      "category": "Museum",
+      "lat": 26.9388595,
+      "lon": 75.7839315,
+      "distanceKm": 3,
+      "wikidata": null
+    },
+    {
+      "id": "way/547207098",
+      "name": "Ajmeri Gate",
+      "category": "Historic Site",
+      "lat": 26.9172468,
+      "lon": 75.8167456,
+      "distanceKm": 3,
+      "wikidata": null
+    },
+    {
+      "id": "node/1496872519",
+      "name": "एल्बर्ट हॉल",
+      "category": "Museum",
+      "lat": 26.9117053,
+      "lon": 75.8194973,
+      "distanceKm": 3.2,
+      "wikidata": "Q4710411"
+    },
+    {
+      "id": "way/229590208",
+      "name": "Albert Hall Museum",
+      "category": "Museum",
+      "lat": 26.9116797,
+      "lon": 75.8195026,
+      "distanceKm": 3.2,
+      "wikidata": null
+    },
+    {
+      "id": "way/759848626",
+      "name": "Police Shahid Smarak",
+      "category": "Historic Site",
+      "lat": 26.8988968,
+      "lon": 75.8162136,
+      "distanceKm": 3.2,
+      "wikidata": null
+    },
+    {
+      "id": "way/272782999",
+      "name": "Haveli",
+      "category": "Historic Site",
+      "lat": 26.9205392,
+      "lon": 75.8188816,
+      "distanceKm": 3.3,
+      "wikidata": null
+    },
+    {
+      "id": "way/442768311",
+      "name": "Man Gate",
+      "category": "Historic Site",
+      "lat": 26.9167338,
+      "lon": 75.8206772,
+      "distanceKm": 3.3,
+      "wikidata": null
+    },
+    {
+      "id": "node/10748448111",
+      "name": "Chhoti roundabout view",
+      "category": "Viewpoint",
+      "lat": 26.9242036,
+      "lon": 75.8186173,
+      "distanceKm": 3.4,
+      "wikidata": null
+    },
+    {
+      "id": "node/11533709370",
+      "name": "rooftop view metal staircase",
+      "category": "Attraction",
+      "lat": 26.9238157,
+      "lon": 75.8206609,
+      "distanceKm": 3.5,
+      "wikidata": null
+    },
+    {
+      "id": "node/2777043242",
+      "name": "Iswari Minar Swarga Sali",
+      "category": "Viewpoint",
+      "lat": 26.9244425,
+      "lon": 75.8208167,
+      "distanceKm": 3.6,
+      "wikidata": null
+    },
+    {
+      "id": "node/12367918008",
+      "name": "rooftop view",
+      "category": "Viewpoint",
+      "lat": 26.9240911,
+      "lon": 75.8207688,
+      "distanceKm": 3.6,
+      "wikidata": null
+    },
+    {
+      "id": "way/230927025",
+      "name": "Moti Doongri Fort",
+      "category": "Historic Site",
+      "lat": 26.8935929,
+      "lon": 75.816775,
+      "distanceKm": 3.6,
+      "wikidata": null
+    },
+    {
+      "id": "way/170101097",
+      "name": "Sanganeri Gate",
+      "category": "Historic Site",
+      "lat": 26.9158691,
+      "lon": 75.8247984,
+      "distanceKm": 3.7,
+      "wikidata": null
+    },
+    {
+      "id": "node/542886857",
+      "name": "जंतर मंतर, जयपुर",
+      "category": "Historic Site",
+      "lat": 26.9247389,
+      "lon": 75.8244663,
+      "distanceKm": 3.9,
+      "wikidata": "Q508634"
+    },
+    {
+      "id": "node/956223020",
+      "name": "गुलाबी नगरी (पिंक सिटी)",
+      "category": "Attraction",
+      "lat": 26.9232015,
+      "lon": 75.8243929,
+      "distanceKm": 3.9,
+      "wikidata": null
+    }
+  ],
+  "goa": [
+    {
+      "id": "node/4319289847",
+      "name": "Kuskem Waterfall",
+      "category": "Attraction",
+      "lat": 15.2992143,
+      "lon": 74.1240471,
+      "distanceKm": 0,
+      "wikidata": null
+    },
+    {
+      "id": "node/7286268495",
+      "name": "Shivaji",
+      "category": "Landmark",
+      "lat": 15.2578786,
+      "lon": 74.110541,
+      "distanceKm": 4.8,
+      "wikidata": null
+    },
+    {
+      "id": "node/7286268494",
+      "name": "Dr. B. R. Ambedkar",
+      "category": "Landmark",
+      "lat": 15.2584792,
+      "lon": 74.1053212,
+      "distanceKm": 5,
+      "wikidata": null
+    },
+    {
+      "id": "relation/19618488",
+      "name": "Bhagwan Mahavir WLS ESZ (South)",
+      "category": "Nature Reserve",
+      "lat": 15.2990676,
+      "lon": 74.1937422,
+      "distanceKm": 7.5,
+      "wikidata": null
+    },
+    {
+      "id": "node/13383525907",
+      "name": "Headless Nandi",
+      "category": "Historic Site",
+      "lat": 15.2581367,
+      "lon": 74.0549648,
+      "distanceKm": 8.7,
+      "wikidata": null
+    },
+    {
+      "id": "way/1459313559",
+      "name": "Chandor Excavated Site",
+      "category": "Historic Site",
+      "lat": 15.2581432,
+      "lon": 74.0549606,
+      "distanceKm": 8.7,
+      "wikidata": "Q56458970"
+    },
+    {
+      "id": "node/2614415019",
+      "name": "Fernandes Heritage Home",
+      "category": "Museum",
+      "lat": 15.2556738,
+      "lon": 74.0518532,
+      "distanceKm": 9.1,
+      "wikidata": null
+    },
+    {
+      "id": "way/1408882770",
+      "name": "Braganza House West Wing",
+      "category": "Historic Site",
+      "lat": 15.2614832,
+      "lon": 74.0432119,
+      "distanceKm": 9.6,
+      "wikidata": null
+    },
+    {
+      "id": "way/1408882771",
+      "name": "Braganza House",
+      "category": "Museum",
+      "lat": 15.2612755,
+      "lon": 74.0435426,
+      "distanceKm": 9.6,
+      "wikidata": null
+    },
+    {
+      "id": "way/1408882772",
+      "name": "Braganza House East Wing",
+      "category": "Historic Site",
+      "lat": 15.2612825,
+      "lon": 74.0436084,
+      "distanceKm": 9.6,
+      "wikidata": null
+    },
+    {
+      "id": "node/4307037691",
+      "name": "Achies Art Gallery",
+      "category": "Landmark",
+      "lat": 15.276333,
+      "lon": 74.03596,
+      "distanceKm": 9.8,
+      "wikidata": null
+    }
+  ],
+  "ladakh": [
+    {
+      "id": "node/1705643189",
+      "name": "Prayer Wheel",
+      "category": "Historic Site",
+      "lat": 34.1525632,
+      "lon": 77.5762435,
+      "distanceKm": 0.1,
+      "wikidata": null
+    },
+    {
+      "id": "node/13985482620",
+      "name": "King Singay Namgyal Chowk",
+      "category": "Historic Site",
+      "lat": 34.1519611,
+      "lon": 77.5761419,
+      "distanceKm": 0.1,
+      "wikidata": null
+    },
+    {
+      "id": "node/6946049086",
+      "name": "14 Corps",
+      "category": "Historic Site",
+      "lat": 34.151692,
+      "lon": 77.5749417,
+      "distanceKm": 0.2,
+      "wikidata": null
+    },
+    {
+      "id": "way/191701360",
+      "name": "Mani-wall",
+      "category": "Attraction",
+      "lat": 34.1532031,
+      "lon": 77.5838059,
+      "distanceKm": 0.6,
+      "wikidata": null
+    },
+    {
+      "id": "node/9371054851",
+      "name": "Zorawar Fort",
+      "category": "Historic Site",
+      "lat": 34.1584095,
+      "lon": 77.5697358,
+      "distanceKm": 0.9,
+      "wikidata": null
+    },
+    {
+      "id": "node/3712469457",
+      "name": "آئی بیکس چوک",
+      "category": "Historic Site",
+      "lat": 34.1591385,
+      "lon": 77.5676374,
+      "distanceKm": 1.1,
+      "wikidata": null
+    },
+    {
+      "id": "node/3713488527",
+      "name": "Prayer wheels",
+      "category": "Historic Site",
+      "lat": 34.1454913,
+      "lon": 77.5668846,
+      "distanceKm": 1.2,
+      "wikidata": null
+    },
+    {
+      "id": "node/5013727942",
+      "name": "Mani-wall and gompa",
+      "category": "Attraction",
+      "lat": 34.1596878,
+      "lon": 77.5862428,
+      "distanceKm": 1.2,
+      "wikidata": null
+    },
+    {
+      "id": "node/5013790121",
+      "name": "Gompas and prayer wheels",
+      "category": "Historic Site",
+      "lat": 34.1606021,
+      "lon": 77.5862797,
+      "distanceKm": 1.2,
+      "wikidata": null
+    },
+    {
+      "id": "node/5013728227",
+      "name": "Gompa and prayer wheel",
+      "category": "Historic Site",
+      "lat": 34.1613458,
+      "lon": 77.5859791,
+      "distanceKm": 1.3,
+      "wikidata": null
+    },
+    {
+      "id": "node/5283745021",
+      "name": "English",
+      "category": "Landmark",
+      "lat": 34.1650002,
+      "lon": 77.5843892,
+      "distanceKm": 1.5,
+      "wikidata": null
+    },
+    {
+      "id": "way/168837739",
+      "name": "Soma Gompa",
+      "category": "Attraction",
+      "lat": 34.1643941,
+      "lon": 77.5846958,
+      "distanceKm": 1.5,
+      "wikidata": null
+    },
+    {
+      "id": "node/4390123390",
+      "name": "Central Asian Museum",
+      "category": "Museum",
+      "lat": 34.1652367,
+      "lon": 77.5848945,
+      "distanceKm": 1.6,
+      "wikidata": null
+    },
+    {
+      "id": "way/167572743",
+      "name": "Leh Palace",
+      "category": "Historic Site",
+      "lat": 34.1659348,
+      "lon": 77.5862026,
+      "distanceKm": 1.7,
+      "wikidata": "Q3043543"
+    },
+    {
+      "id": "way/168001251",
+      "name": "Chandazik Gompa",
+      "category": "Attraction",
+      "lat": 34.1658066,
+      "lon": 77.5879015,
+      "distanceKm": 1.8,
+      "wikidata": null
+    },
+    {
+      "id": "node/6031232191",
+      "name": "Cemetery",
+      "category": "Attraction",
+      "lat": 34.168821,
+      "lon": 77.5821983,
+      "distanceKm": 1.9,
+      "wikidata": null
+    },
+    {
+      "id": "way/168001905",
+      "name": "Namgyal Tsemo",
+      "category": "Historic Site",
+      "lat": 34.1674236,
+      "lon": 77.5903473,
+      "distanceKm": 2.1,
+      "wikidata": "Q59657882"
+    },
+    {
+      "id": "way/167574960",
+      "name": "Shanti Stupa",
+      "category": "Attraction",
+      "lat": 34.1737551,
+      "lon": 77.5749382,
+      "distanceKm": 2.4,
+      "wikidata": null
+    },
+    {
+      "id": "node/3699683113",
+      "name": "Ladakh Rocks & Minerals museum",
+      "category": "Museum",
+      "lat": 34.1742835,
+      "lon": 77.5856883,
+      "distanceKm": 2.5,
+      "wikidata": null
+    },
+    {
+      "id": "way/167863573",
+      "name": "Samkar Gompa",
+      "category": "Attraction",
+      "lat": 34.1741713,
+      "lon": 77.5854055,
+      "distanceKm": 2.5,
+      "wikidata": "Q7418634"
+    }
+  ],
+  "andaman": [
+    {
+      "id": "node/9333293936",
+      "name": "Kala Pani",
+      "category": "Museum",
+      "lat": 11.6147888,
+      "lon": 92.7040928,
+      "distanceKm": 2.6,
+      "wikidata": null
+    },
+    {
+      "id": "way/207052404",
+      "name": "Corbyns Cove Beach",
+      "category": "Beach",
+      "lat": 11.6428293,
+      "lon": 92.746873,
+      "distanceKm": 3.1,
+      "wikidata": null
+    },
+    {
+      "id": "node/11407378032",
+      "name": "Veer Savarkar Statue",
+      "category": "Landmark",
+      "lat": 11.6525762,
+      "lon": 92.732577,
+      "distanceKm": 3.3,
+      "wikidata": null
+    },
+    {
+      "id": "relation/9340731",
+      "name": "Snake Island II WLS",
+      "category": "Nature Reserve",
+      "lat": 11.6374989,
+      "lon": 92.7549291,
+      "distanceKm": 3.5,
+      "wikidata": null
+    },
+    {
+      "id": "node/11671061770",
+      "name": "Joggers park",
+      "category": "Attraction",
+      "lat": 11.6565539,
+      "lon": 92.741258,
+      "distanceKm": 4,
+      "wikidata": null
+    },
+    {
+      "id": "node/293692113",
+      "name": "Mathoma Church Complex",
+      "category": "Attraction",
+      "lat": 11.6651,
+      "lon": 92.73266,
+      "distanceKm": 4.7,
+      "wikidata": null
+    },
+    {
+      "id": "node/6487971685",
+      "name": "Statues, military & a base",
+      "category": "Historic Site",
+      "lat": 11.6651605,
+      "lon": 92.723207,
+      "distanceKm": 4.7,
+      "wikidata": null
+    },
+    {
+      "id": "node/4092073763",
+      "name": "Zonal Anthropological Museum",
+      "category": "Museum",
+      "lat": 11.66438,
+      "lon": 92.7402326,
+      "distanceKm": 4.8,
+      "wikidata": null
+    },
+    {
+      "id": "way/26775693",
+      "name": "Gandhi Park",
+      "category": "Nature Reserve",
+      "lat": 11.66347,
+      "lon": 92.742655,
+      "distanceKm": 4.8,
+      "wikidata": null
+    },
+    {
+      "id": "way/407174963",
+      "name": "Science Centre",
+      "category": "Museum",
+      "lat": 11.6548003,
+      "lon": 92.7562878,
+      "distanceKm": 4.8,
+      "wikidata": null
+    },
+    {
+      "id": "node/5253382322",
+      "name": "Gandhi statue",
+      "category": "Historic Site",
+      "lat": 11.6690744,
+      "lon": 92.7394902,
+      "distanceKm": 5.3,
+      "wikidata": null
+    },
+    {
+      "id": "way/410453967",
+      "name": "Samudrika marine museum",
+      "category": "Museum",
+      "lat": 11.6718288,
+      "lon": 92.7261233,
+      "distanceKm": 5.4,
+      "wikidata": null
+    },
+    {
+      "id": "node/5253382321",
+      "name": "Clock tower",
+      "category": "Historic Site",
+      "lat": 11.669941,
+      "lon": 92.7427759,
+      "distanceKm": 5.5,
+      "wikidata": null
+    },
+    {
+      "id": "node/13980278150",
+      "name": "Vijayanta Main battle tank",
+      "category": "Historic Site",
+      "lat": 11.6689581,
+      "lon": 92.7478365,
+      "distanceKm": 5.6,
+      "wikidata": null
+    },
+    {
+      "id": "node/2171704508",
+      "name": "Rajiv Gandhi Memorial",
+      "category": "Historic Site",
+      "lat": 11.6715958,
+      "lon": 92.7496893,
+      "distanceKm": 5.9,
+      "wikidata": null
+    },
+    {
+      "id": "node/14018218063",
+      "name": "Tsunami memorial",
+      "category": "Historic Site",
+      "lat": 11.6724261,
+      "lon": 92.7483741,
+      "distanceKm": 5.9,
+      "wikidata": null
+    },
+    {
+      "id": "node/293675265",
+      "name": "Forest Museum",
+      "category": "Museum",
+      "lat": 11.6773956,
+      "lon": 92.7240092,
+      "distanceKm": 6,
+      "wikidata": null
+    },
+    {
+      "id": "node/293675271",
+      "name": "Mini Zoo",
+      "category": "Zoo",
+      "lat": 11.67744,
+      "lon": 92.72536,
+      "distanceKm": 6,
+      "wikidata": null
+    },
+    {
+      "id": "node/14018223388",
+      "name": "Memorial for the battle of Aberdeen",
+      "category": "Historic Site",
+      "lat": 11.6728016,
+      "lon": 92.7486941,
+      "distanceKm": 6,
+      "wikidata": null
+    },
+    {
+      "id": "node/9325868708",
+      "name": "Swatantrya Jyot",
+      "category": "Historic Site",
+      "lat": 11.6739909,
+      "lon": 92.747703,
+      "distanceKm": 6.1,
+      "wikidata": null
+    }
+  ],
+  "udaipur": [
+    {
+      "id": "way/1350396496",
+      "name": "Udaipol",
+      "category": "Historic Site",
+      "lat": 24.5761055,
+      "lon": 73.699304,
+      "distanceKm": 1.7,
+      "wikidata": null
+    },
+    {
+      "id": "way/1350440039",
+      "name": "Delhi Gate",
+      "category": "Historic Site",
+      "lat": 24.5853744,
+      "lon": 73.6950442,
+      "distanceKm": 1.8,
+      "wikidata": null
+    },
+    {
+      "id": "way/1350440050",
+      "name": "Suraj Pol (Sun Gate)",
+      "category": "Historic Site",
+      "lat": 24.5794754,
+      "lon": 73.6960841,
+      "distanceKm": 1.8,
+      "wikidata": null
+    },
+    {
+      "id": "way/1360412833",
+      "name": "hansa palace",
+      "category": "Art Gallery",
+      "lat": 24.5698439,
+      "lon": 73.7224479,
+      "distanceKm": 2,
+      "wikidata": null
+    },
+    {
+      "id": "node/3898009271",
+      "name": "Vintage and Classic Car Collection",
+      "category": "Museum",
+      "lat": 24.576052,
+      "lon": 73.6945317,
+      "distanceKm": 2.1,
+      "wikidata": "Q24952067"
+    },
+    {
+      "id": "node/1248264731",
+      "name": "Bharatiya Lok Kala Museum",
+      "category": "Museum",
+      "lat": 24.5943478,
+      "lon": 73.6917088,
+      "distanceKm": 2.3,
+      "wikidata": null
+    },
+    {
+      "id": "node/1248564074",
+      "name": "Hathi Pol (Elephant Gate)",
+      "category": "Historic Site",
+      "lat": 24.5867389,
+      "lon": 73.6875335,
+      "distanceKm": 2.5,
+      "wikidata": null
+    },
+    {
+      "id": "node/10264335409",
+      "name": "आर के सर्किल",
+      "category": "Historic Site",
+      "lat": 24.6070549,
+      "lon": 73.6997474,
+      "distanceKm": 2.7,
+      "wikidata": null
+    },
+    {
+      "id": "node/12424703312",
+      "name": "Gulab Bagh Bird Park",
+      "category": "Zoo",
+      "lat": 24.5710088,
+      "lon": 73.69108,
+      "distanceKm": 2.7,
+      "wikidata": null
+    },
+    {
+      "id": "node/1248317767",
+      "name": "Kishan Pol",
+      "category": "Historic Site",
+      "lat": 24.5674697,
+      "lon": 73.6918005,
+      "distanceKm": 2.9,
+      "wikidata": null
+    },
+    {
+      "id": "node/12424701805",
+      "name": "Bari Ghat",
+      "category": "Attraction",
+      "lat": 24.5836979,
+      "lon": 73.6826368,
+      "distanceKm": 3,
+      "wikidata": null
+    },
+    {
+      "id": "node/936651777",
+      "name": "City Palace",
+      "category": "Museum",
+      "lat": 24.5764662,
+      "lon": 73.6835836,
+      "distanceKm": 3.1,
+      "wikidata": null
+    },
+    {
+      "id": "node/1268700265",
+      "name": "Chand Pol",
+      "category": "Historic Site",
+      "lat": 24.5826417,
+      "lon": 73.6819528,
+      "distanceKm": 3.1,
+      "wikidata": null
+    },
+    {
+      "id": "node/3234257854",
+      "name": "Gangaur Ghat",
+      "category": "Attraction",
+      "lat": 24.5799938,
+      "lon": 73.6819466,
+      "distanceKm": 3.1,
+      "wikidata": "Q28154058"
+    },
+    {
+      "id": "node/5228552134",
+      "name": "Lal Ghat",
+      "category": "Attraction",
+      "lat": 24.5789237,
+      "lon": 73.6822604,
+      "distanceKm": 3.1,
+      "wikidata": null
+    },
+    {
+      "id": "node/6698608787",
+      "name": "Ashoka arts",
+      "category": "Landmark",
+      "lat": 24.580554,
+      "lon": 73.6824704,
+      "distanceKm": 3.1,
+      "wikidata": null
+    },
+    {
+      "id": "node/7332544542",
+      "name": "Bagore-ki-Haveli",
+      "category": "Historic Site",
+      "lat": 24.5797365,
+      "lon": 73.6823966,
+      "distanceKm": 3.1,
+      "wikidata": null
+    },
+    {
+      "id": "node/10881001119",
+      "name": "Govindam art gallery & handicraft",
+      "category": "Art Gallery",
+      "lat": 24.5801917,
+      "lon": 73.6822073,
+      "distanceKm": 3.1,
+      "wikidata": null
+    },
+    {
+      "id": "node/1268700268",
+      "name": "Daiji Bridge Pol",
+      "category": "Historic Site",
+      "lat": 24.5811637,
+      "lon": 73.6816687,
+      "distanceKm": 3.2,
+      "wikidata": null
+    },
+    {
+      "id": "node/10899252562",
+      "name": "Bansi Ghat",
+      "category": "Attraction",
+      "lat": 24.5753203,
+      "lon": 73.6828525,
+      "distanceKm": 3.2,
+      "wikidata": null
+    }
+  ]
+}
