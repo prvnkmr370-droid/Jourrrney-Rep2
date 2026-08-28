@@ -29,6 +29,17 @@ db.exec(`
     expires_at TEXT NOT NULL,
     attempts INTEGER NOT NULL DEFAULT 0
   );
+
+  -- Cache of OpenStreetMap/Overpass "places of interest" results per
+  -- destination, so the free public Overpass instance (rate-limited, and
+  -- slow — a few seconds per query) is hit at most once every
+  -- CACHE_TTL_DAYS per destination, not on every user's page view. See
+  -- routes/places.js.
+  CREATE TABLE IF NOT EXISTS places_cache (
+    destination_id TEXT PRIMARY KEY,
+    payload TEXT NOT NULL,
+    fetched_at TEXT NOT NULL
+  );
 `);
 
 // Lightweight migration: add profile columns to `users` if they don't
