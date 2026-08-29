@@ -45,6 +45,16 @@ Both need to be up for sign-in to work.
   device — this first pass only covers authentication, per your original
   scope choice. Ask to extend this backend to persist that data whenever
   you're ready.
+- **Real, but optional**: `POST /plan-trip/ai` (`src/routes/planTrip.js`)
+  generates a real AI itinerary via Google's Gemini API (genuinely free
+  tier — get a key at [ai.google.dev](https://ai.google.dev), no card
+  required). Set `GEMINI_API_KEY` in `.env` (local) or the Render
+  dashboard's Environment tab (deployed) to turn it on. Leave it unset and
+  the route responds `503` — the app already falls back to its local
+  rule-based planner (`generateItinerary()` in
+  `journey-app/src/screens/PlanTrip/data.ts`) whenever this endpoint is
+  unavailable for any reason (no key, network hiccup, free-tier quota
+  used up), so this is additive, never a hard dependency.
 
 ## Deploying this for real
 

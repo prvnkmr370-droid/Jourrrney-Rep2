@@ -16,3 +16,10 @@ services:
       # added. Flip to "production" once real email delivery exists.
       - key: NODE_ENV
         value: development
+      # `sync: false` means Render won't try to auto-generate or require a
+      # value at deploy time — it just leaves a blank slot to fill in
+      # manually from the Render dashboard (Environment tab). Get a free
+      # key at https://ai.google.dev. Powers POST /plan-trip/ai; the app
+      # falls back to its local planner if this is left unset.
+      - key: GEMINI_API_KEY
+        sync: false
