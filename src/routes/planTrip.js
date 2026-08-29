@@ -29,7 +29,11 @@ const { GoogleGenAI } = require("@google/genai");
 
 const router = express.Router();
 
-const MODEL = "gemini-2.5-flash";
+// gemini-2.5-flash was retired — Google's own API error on that model id
+// points here. Verified working directly against the API before landing
+// this (see commit message): returns clean JSON-mode output, same shape
+// this route already expects.
+const MODEL = "gemini-3.6-flash";
 const REQUEST_TIMEOUT_MS = 20000;
 
 function buildPrompt(body) {
