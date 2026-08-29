@@ -8,7 +8,12 @@ const planTripRoutes = require("./routes/planTrip");
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+// Default express.json() body limit is ~100kb -- fine for every other
+// route here, but POST /plan-trip/parse-intent can now carry a base64-
+// encoded photo (see planTrip.js) that easily exceeds that. The app
+// resizes/compresses images client-side before sending, so 8mb is a
+// generous ceiling, not an expected typical size.
+app.use(express.json({ limit: "8mb" }));
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
 app.use("/auth", authRoutes);

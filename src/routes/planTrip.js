@@ -65,11 +65,13 @@ Requirements:
 - Keep each field concise — this renders in a mobile app card, not a blog post.`;
 }
 
-// Shared by both routes below: calls Gemini in JSON mode, parses the
+// Shared by all routes below: calls Gemini in JSON mode, parses the
 // result, and throws a plain Error with a useful message on any failure
 // (no API key, timeout, non-JSON output) — callers turn that into the
-// appropriate HTTP response themselves.
-async function callGeminiJson(prompt) {
+// appropriate HTTP response themselves. `contents` is either a plain
+// prompt string or a Part[] (text + inlineData) for the image-intent
+// route below — the SDK accepts both under the same `contents` field.
+async function callGeminiJson(contents) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw Object.assign(new Error("AI isn't configured on this server yet (no GEMINI_API_KEY)."), { status: 503 });
 
@@ -79,7 +81,7 @@ async function callGeminiJson(prompt) {
   try {
     const response = await ai.models.generateContent({
       model: MODEL,
-      contents: prompt,
+      contents,
       config: { responseMimeType: "application/json", temperature: 0.6 },
     });
     clearTimeout(timeout);
@@ -117,31 +119,44 @@ router.post("/ai", async (req, res) => {
 });
 
 /**
- * POST /plan-trip/parse-intent — free-text trip-intent understanding,
- * inspired by how Layla.ai handles fuzzy requests ("a warm place in
- * February that's not too expensive from Paris") rather than requiring an
- * exact destination name. The app's own fast local matcher (see
- * matchDestination.ts / parseTripMessage.ts) handles the common case —
- * this route is only called as a fallback when that finds nothing, so a
- * vague or oddly-phrased message still has a real shot at landing on one
+ * POST /plan-trip/parse-intent — free-text (and now optionally photo-
+ * based) trip-intent understanding, inspired by two things Layla.ai does:
+ * handling fuzzy requests ("a warm place in February that's not too
+ * expensive from Paris") rather than requiring an exact destination name,
+ * and reading a photo for inspiration. The app's own fast local matcher
+ * (see matchDestination.ts / parseTripMessage.ts) handles the plain-name
+ * case — this route is the fallback for everything that isn't, so a vague
+ * message or an inspiration photo still has a real shot at landing on one
  * of the app's actual destinations instead of a dead end.
  *
  * Grounded, not generative: Gemini is only allowed to pick a
  * destinationId from the exact list the client sends (this app's own
  * database) — it never invents a place, and is explicitly told to return
  * null rather than force-fit an unrelated one when nothing genuinely
- * matches the request.
+ * matches the request or the photo.
  *
- * body: { message: string, destinations: { id, name, state, tagline, category }[] }
+ * body: {
+ *   message?: string,
+ *   image?: { base64: string, mimeType: string },   // at least one of message/image required
+ *   destinations: { id, name, state, tagline, category }[]
+ * }
  */
-function buildIntentPrompt(message, destinations) {
+const MAX_IMAGE_BASE64_CHARS = 6_000_000; // ~4.5MB decoded — plenty for a resized phone photo, well under the 8mb body-limit ceiling in index.js
+
+function buildIntentPrompt(message, hasImage, destinations) {
   const list = destinations.map((d) => `${d.id} | ${d.name}, ${d.state} | ${d.tagline} | ${(d.category || []).join("/")}`).join("\n");
-  return `A user typed this trip request into a travel-planning chat: "${message}"
+  const requestDescription = hasImage
+    ? message
+      ? `A user attached a photo to a travel-planning chat, with this caption: "${message}"`
+      : `A user attached a photo to a travel-planning chat, with no caption.`
+    : `A user typed this trip request into a travel-planning chat: "${message}"`;
+
+  return `${requestDescription}
 
 Here is the ONLY list of destinations available to plan a trip to (id | name, state | tagline | categories):
 ${list}
 
-Task: interpret the request, however vague or indirect ("somewhere warm and cheap in February", "a beach trip not too far from Bangalore"), and pick the single best-matching destination id from the list above — using the tagline/categories to judge vibe/theme, not just literal name matches. If the request clearly names or implies a place genuinely outside this list (e.g. an international destination like Bali or Paris), or nothing in the list is a reasonable fit at all, return null for destinationId rather than forcing a bad match.
+Task: interpret the request${hasImage ? " — including what's actually shown in the photo (scenery, architecture, activity, mood) as the primary signal, using any caption as extra context" : ", however vague or indirect (\"somewhere warm and cheap in February\", \"a beach trip not too far from Bangalore\")"}, and pick the single best-matching destination id from the list above — using the tagline/categories to judge vibe/theme, not just literal name matches. If the request${hasImage ? "/photo" : ""} clearly names or implies a place genuinely outside this list (e.g. an international destination like Bali or Paris, or a photo that's obviously not India), or nothing in the list is a reasonable fit at all, return null for destinationId rather than forcing a bad match.
 
 Also pull out, only if explicitly stated or very strongly implied:
 - a number of days
@@ -156,18 +171,30 @@ Return ONLY a JSON object, no markdown fences, no commentary:
   "people": <number or null>,
   "style": "<backpacker|comfortable|premium|null>",
   "interests": [<zero or more of the fixed set above>],
-  "reasoning": "<one short sentence, shown to the user, explaining the match (or why nothing matched)>"
+  "reasoning": "<one short sentence, shown to the user, explaining the match${hasImage ? " (mention what you recognized in the photo)" : ""} (or why nothing matched)>"
 }`;
 }
 
 router.post("/parse-intent", async (req, res) => {
-  const { message, destinations } = req.body || {};
-  if (typeof message !== "string" || !message.trim() || !Array.isArray(destinations) || destinations.length === 0) {
-    return res.status(400).json({ error: "message (string) and destinations (non-empty array) are required" });
+  const { message, image, destinations } = req.body || {};
+  const hasMessage = typeof message === "string" && message.trim().length > 0;
+  const hasImage = !!(image && typeof image.base64 === "string" && typeof image.mimeType === "string");
+
+  if ((!hasMessage && !hasImage) || !Array.isArray(destinations) || destinations.length === 0) {
+    return res.status(400).json({ error: "message and/or image, plus a non-empty destinations array, are required" });
+  }
+  if (hasImage && image.base64.length > MAX_IMAGE_BASE64_CHARS) {
+    return res.status(413).json({ error: "That photo is too large — try a smaller one." });
+  }
+  if (hasImage && !image.mimeType.startsWith("image/")) {
+    return res.status(400).json({ error: "image.mimeType must be an image/* type" });
   }
 
+  const prompt = buildIntentPrompt(hasMessage ? message.trim() : "", hasImage, destinations);
+  const contents = hasImage ? [{ text: prompt }, { inlineData: { data: image.base64, mimeType: image.mimeType } }] : prompt;
+
   try {
-    const parsed = await callGeminiJson(buildIntentPrompt(message.trim(), destinations));
+    const parsed = await callGeminiJson(contents);
     const validIds = new Set(destinations.map((d) => d.id));
     const destinationId = typeof parsed.destinationId === "string" && validIds.has(parsed.destinationId) ? parsed.destinationId : null;
     return res.json({
