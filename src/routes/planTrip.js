@@ -4,9 +4,12 @@
  * Uses Google's Gemini API (free tier — see .env.example for how to get a
  * key) to actually generate an itinerary, replacing what used to be a
  * purely rule-based template (still lives in the app as generateItinerary()
- * in src/screens/PlanTrip/data.ts, and stays there as the fallback when
- * this endpoint is unavailable — no API key configured, Gemini's free-tier
- * quota exhausted, network hiccup, etc.).
+ * in src/screens/PlanTrip/data.ts, and stays there as the final fallback
+ * when AI is unavailable entirely). Gemini also has its own failsafe now:
+ * on a Gemini failure, the same request is retried once against Groq's
+ * free tier (see callAiJson below) before giving up to the local planner —
+ * both free, no billing on either, so a single provider's "high demand"
+ * 503 or an exhausted quota doesn't take AI planning down by itself.
  *
  * The app already has all the destination data (see journey-app's
  * destinations.ts) — rather than duplicating that database here, the
@@ -34,7 +37,25 @@ const router = express.Router();
 // this (see commit message): returns clean JSON-mode output, same shape
 // this route already expects.
 const MODEL = "gemini-3.6-flash";
-const REQUEST_TIMEOUT_MS = 20000;
+
+// Groq (console.groq.com — the fast-inference company, unrelated to xAI's
+// "Grok") is the failsafe: on a Gemini failure (the free tier's occasional
+// "high demand" 503, a timeout, a quota blip), the SAME prompt is retried
+// here instead of giving up straight to the local rule-based fallback.
+// Text-only — Groq's free tier doesn't have a vision model verified
+// reliable enough for the photo-intent case, so image requests stay
+// Gemini-only (see hasFallback below). Both free tiers, no billing on
+// either — see GEMINI_API_KEY / GROQ_API_KEY in .env.example.
+const GROQ_MODEL = "llama-3.3-70b-versatile";
+const GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions";
+
+// Shorter Gemini timeout when a Groq fallback is available (text-only
+// requests) — no point waiting the full budget on the primary when a
+// working secondary is one quick call away. The image path has no
+// fallback, so it keeps the old, longer budget.
+const GEMINI_TIMEOUT_MS_WITH_FALLBACK = 12000;
+const GEMINI_TIMEOUT_MS_NO_FALLBACK = 20000;
+const GROQ_TIMEOUT_MS = 10000;
 
 function buildPrompt(body) {
   const { destination: d, style: sc, days, people, preferences, origin, startDate, dailyBudget } = body;
@@ -71,13 +92,13 @@ Requirements:
 // appropriate HTTP response themselves. `contents` is either a plain
 // prompt string or a Part[] (text + inlineData) for the image-intent
 // route below — the SDK accepts both under the same `contents` field.
-async function callGeminiJson(contents) {
+async function callGeminiJson(contents, timeoutMs) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw Object.assign(new Error("AI isn't configured on this server yet (no GEMINI_API_KEY)."), { status: 503 });
 
   const ai = new GoogleGenAI({ apiKey });
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await ai.models.generateContent({
       model: MODEL,
@@ -97,6 +118,76 @@ async function callGeminiJson(contents) {
   }
 }
 
+// The failsafe: same job as callGeminiJson but against Groq's OpenAI-
+// compatible chat-completions endpoint (plain fetch — Groq needs no SDK,
+// keeping this a zero-new-dependency change). Text-only, since the
+// image/vision route never calls this (see hasFallback in each route).
+async function callGroqJson(promptText) {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) throw Object.assign(new Error("Groq isn't configured on this server (no GROQ_API_KEY)."), { status: 503 });
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), GROQ_TIMEOUT_MS);
+  try {
+    const res = await fetch(GROQ_ENDPOINT, {
+      method: "POST",
+      signal: controller.signal,
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: GROQ_MODEL,
+        messages: [{ role: "user", content: promptText }],
+        temperature: 0.6,
+        response_format: { type: "json_object" },
+      }),
+    });
+    clearTimeout(timeout);
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      throw Object.assign(new Error(`Groq request failed (${res.status})`), { status: 502, detail });
+    }
+    const data = await res.json();
+    const text = data?.choices?.[0]?.message?.content;
+    if (!text) throw new Error("Empty response from Groq");
+    try {
+      return JSON.parse(text);
+    } catch {
+      throw new Error("Groq returned non-JSON output");
+    }
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/**
+ * Gemini-first, Groq-as-failsafe. `promptText` must be the same request
+ * expressed as a plain string — Groq only takes text, so the image-intent
+ * route passes `hasFallback: false` and this collapses to "just call
+ * Gemini" for that case, unchanged from before. Whichever provider
+ * actually answers is returned as `source` so callers/clients can tell
+ * (and so it's visible in logs which free tier is carrying a given
+ * request, useful for noticing if one side is rate-limited a lot).
+ */
+async function callAiJson(geminiContents, promptText, hasFallback) {
+  try {
+    const result = await callGeminiJson(geminiContents, hasFallback ? GEMINI_TIMEOUT_MS_WITH_FALLBACK : GEMINI_TIMEOUT_MS_NO_FALLBACK);
+    return { result, source: "gemini" };
+  } catch (geminiErr) {
+    if (!hasFallback) throw geminiErr;
+    console.error("Gemini call failed, falling back to Groq:", geminiErr.message);
+    try {
+      const result = await callGroqJson(promptText);
+      return { result, source: "groq" };
+    } catch (groqErr) {
+      console.error("Groq fallback also failed:", groqErr.message);
+      // Surface the ORIGINAL Gemini error to the client (its status code is
+      // the more meaningful one — e.g. "no API key" vs Groq's own outage) —
+      // both having failed just means the caller falls through to the
+      // existing local rule-based planner, same contract as before.
+      throw geminiErr;
+    }
+  }
+}
+
 router.post("/ai", async (req, res) => {
   const { destination, style, days, people } = req.body || {};
   if (!destination?.name || !style?.label || !days || !people) {
@@ -104,16 +195,19 @@ router.post("/ai", async (req, res) => {
   }
 
   try {
-    const parsed = await callGeminiJson(buildPrompt(req.body));
+    const prompt = buildPrompt(req.body);
+    // Always text-only here (no photo in this route) — the Groq failsafe
+    // always applies.
+    const { result: parsed, source } = await callAiJson(prompt, prompt, true);
     if (!Array.isArray(parsed.itinerary) || parsed.itinerary.length === 0) {
-      throw new Error("Malformed itinerary in Gemini response");
+      throw new Error(`Malformed itinerary in ${source} response`);
     }
-    return res.json({ itinerary: parsed.itinerary, tips: Array.isArray(parsed.tips) ? parsed.tips : [], source: "gemini" });
+    return res.json({ itinerary: parsed.itinerary, tips: Array.isArray(parsed.tips) ? parsed.tips : [], source });
   } catch (err) {
-    console.error("Gemini trip-plan generation failed:", err.message);
+    console.error("AI trip-plan generation failed (both Gemini and Groq):", err.message);
     // 502 tells the app this specific call failed (not a client mistake) —
-    // it falls back to the local rule-based generator, so a Gemini outage
-    // or exhausted free-tier quota never actually blocks trip planning.
+    // it falls back to the local rule-based generator, so an outage on
+    // both free tiers never actually blocks trip planning.
     return res.status(err.status ?? 502).json({ error: "AI planning is temporarily unavailable — using the standard planner instead.", detail: err.message });
   }
 });
@@ -192,9 +286,12 @@ router.post("/parse-intent", async (req, res) => {
 
   const prompt = buildIntentPrompt(hasMessage ? message.trim() : "", hasImage, destinations);
   const contents = hasImage ? [{ text: prompt }, { inlineData: { data: image.base64, mimeType: image.mimeType } }] : prompt;
+  // The Groq failsafe only understands plain text — a photo request stays
+  // Gemini-only, same as before this change.
+  const hasFallback = !hasImage;
 
   try {
-    const parsed = await callGeminiJson(contents);
+    const { result: parsed, source } = await callAiJson(contents, prompt, hasFallback);
     const validIds = new Set(destinations.map((d) => d.id));
     const destinationId = typeof parsed.destinationId === "string" && validIds.has(parsed.destinationId) ? parsed.destinationId : null;
     return res.json({
@@ -204,9 +301,10 @@ router.post("/parse-intent", async (req, res) => {
       style: ["backpacker", "comfortable", "premium"].includes(parsed.style) ? parsed.style : null,
       interests: Array.isArray(parsed.interests) ? parsed.interests.filter((i) => typeof i === "string") : [],
       reasoning: typeof parsed.reasoning === "string" ? parsed.reasoning : "",
+      source,
     });
   } catch (err) {
-    console.error("Gemini intent-parsing failed:", err.message);
+    console.error("AI intent-parsing failed (both Gemini and Groq):", err.message);
     return res.status(err.status ?? 502).json({ error: "Couldn't interpret that right now.", detail: err.message });
   }
 });
