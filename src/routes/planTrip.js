@@ -182,8 +182,12 @@ async function callAiJson(geminiContents, promptText, hasFallback) {
       // Surface the ORIGINAL Gemini error to the client (its status code is
       // the more meaningful one — e.g. "no API key" vs Groq's own outage) —
       // both having failed just means the caller falls through to the
-      // existing local rule-based planner, same contract as before.
-      throw geminiErr;
+      // existing local rule-based planner, same contract as before. Attach
+      // the fallback attempt's own outcome too (non-secret — just error
+      // text) so it's visible in the response/logs rather than silently
+      // swallowed, which made a real Gemini+Groq double-failure look
+      // identical to "Groq was never tried" from the outside.
+      throw Object.assign(geminiErr, { groqAttempted: true, groqError: groqErr.message });
     }
   }
 }
@@ -215,11 +219,16 @@ router.post("/ai", async (req, res) => {
     }
     return res.json({ itinerary: parsed.itinerary, tips: Array.isArray(parsed.tips) ? parsed.tips : [], source });
   } catch (err) {
-    console.error("AI trip-plan generation failed (both Gemini and Groq):", err.message);
+    console.error("AI trip-plan generation failed (both Gemini and Groq):", err.message, err.groqAttempted ? `| groq: ${err.groqError}` : "| groq: not attempted");
     // 502 tells the app this specific call failed (not a client mistake) —
     // it falls back to the local rule-based generator, so an outage on
     // both free tiers never actually blocks trip planning.
-    return res.status(err.status ?? 502).json({ error: "AI planning is temporarily unavailable — using the standard planner instead.", detail: err.message });
+    return res.status(err.status ?? 502).json({
+      error: "AI planning is temporarily unavailable — using the standard planner instead.",
+      detail: err.message,
+      groqAttempted: !!err.groqAttempted,
+      groqError: err.groqError ?? null,
+    });
   }
 });
 
@@ -315,8 +324,13 @@ router.post("/parse-intent", async (req, res) => {
       source,
     });
   } catch (err) {
-    console.error("AI intent-parsing failed (both Gemini and Groq):", err.message);
-    return res.status(err.status ?? 502).json({ error: "Couldn't interpret that right now.", detail: err.message });
+    console.error("AI intent-parsing failed (both Gemini and Groq):", err.message, err.groqAttempted ? `| groq: ${err.groqError}` : "| groq: not attempted");
+    return res.status(err.status ?? 502).json({
+      error: "Couldn't interpret that right now.",
+      detail: err.message,
+      groqAttempted: !!err.groqAttempted,
+      groqError: err.groqError ?? null,
+    });
   }
 });
 
