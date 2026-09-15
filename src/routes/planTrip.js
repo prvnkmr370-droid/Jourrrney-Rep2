@@ -46,7 +46,15 @@ const MODEL = "gemini-3.6-flash";
 // reliable enough for the photo-intent case, so image requests stay
 // Gemini-only (see hasFallback below). Both free tiers, no billing on
 // either — see GEMINI_API_KEY / GROQ_API_KEY in .env.example.
-const GROQ_MODEL = "llama-3.3-70b-versatile";
+//
+// NOTE: llama-3.3-70b-versatile (Groq's own quickstart-doc example model)
+// is Enterprise-only as of this writing — console.groq.com/docs/models
+// lists it "Contact Sales", no free-tier rate limits at all, and it 404s
+// on a free-tier key. gpt-oss-120b is confirmed on the actual free tier
+// (verified live against both the Models page and the Free Plan Limits
+// table) — if this ever needs to change again, check that page directly
+// rather than trusting the quickstart example.
+const GROQ_MODEL = "openai/gpt-oss-120b";
 const GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions";
 
 // Shorter Gemini timeout when a Groq fallback is available (text-only
