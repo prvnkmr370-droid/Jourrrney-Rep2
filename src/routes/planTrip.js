@@ -188,6 +188,17 @@ async function callAiJson(geminiContents, promptText, hasFallback) {
   }
 }
 
+// GET /plan-trip/status — booleans only, never the actual key values.
+// Lets us (and you) confirm a just-added GROQ_API_KEY actually made it
+// into the live environment after a Render redeploy, without needing to
+// force a Gemini failure or expose any secret over the wire.
+router.get("/status", (_req, res) => {
+  res.json({
+    gemini: { configured: !!process.env.GEMINI_API_KEY, model: MODEL },
+    groq: { configured: !!process.env.GROQ_API_KEY, model: GROQ_MODEL },
+  });
+});
+
 router.post("/ai", async (req, res) => {
   const { destination, style, days, people } = req.body || {};
   if (!destination?.name || !style?.label || !days || !people) {
