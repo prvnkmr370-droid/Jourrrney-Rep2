@@ -257,6 +257,14 @@ router.post("/ai", async (req, res) => {
  * null rather than force-fit an unrelated one when nothing genuinely
  * matches the request or the photo.
  *
+ * A null destinationId is deliberately NOT treated as "this place is
+ * outside India" — the list is only this app's current catalog, not every
+ * real place in the country, so most real Indian towns/villages/forts
+ * simply aren't in it yet. The response carries a separate `outsideIndia`
+ * boolean (see buildIntentPrompt) so the client can tell "real Indian
+ * place we don't have data for" apart from "genuinely a different
+ * country" and respond honestly instead of assuming the latter.
+ *
  * body: {
  *   message?: string,
  *   image?: { base64: string, mimeType: string },   // at least one of message/image required
@@ -278,7 +286,14 @@ function buildIntentPrompt(message, hasImage, destinations) {
 Here is the ONLY list of destinations available to plan a trip to (id | name, state | tagline | categories):
 ${list}
 
-Task: interpret the request${hasImage ? " — including what's actually shown in the photo (scenery, architecture, activity, mood) as the primary signal, using any caption as extra context" : ", however vague or indirect (\"somewhere warm and cheap in February\", \"a beach trip not too far from Bangalore\")"}, and pick the single best-matching destination id from the list above — using the tagline/categories to judge vibe/theme, not just literal name matches. If the request${hasImage ? "/photo" : ""} clearly names or implies a place genuinely outside this list (e.g. an international destination like Bali or Paris, or a photo that's obviously not India), or nothing in the list is a reasonable fit at all, return null for destinationId rather than forcing a bad match.
+Task: interpret the request${hasImage ? " — including what's actually shown in the photo (scenery, architecture, activity, mood) as the primary signal, using any caption as extra context" : ", however vague or indirect (\"somewhere warm and cheap in February\", \"a beach trip not too far from Bangalore\")"}, and pick the single best-matching destination id from the list above — using the tagline/categories to judge vibe/theme, not just literal name matches.
+
+This list is NOT the full set of real places in India — it's just this one app's current catalog, which is still growing. So when nothing in the list is a good fit, use your own real-world/geographic knowledge (not just the list) to classify why into exactly ONE of these three cases, and set the matching fields:
+1. Genuinely outside India — the request${hasImage ? "/photo" : ""} clearly names or strongly implies a real, specific place outside India (e.g. an international destination like Bali or Paris, or a photo that's obviously not India — a foreign skyline, a non-Indian script on a sign, etc.). Set "outsideIndia": true, "recognizedIndianPlace": false.
+2. A real Indian place you recognize, just not in this app's list — the request names a specific, real place (a town, village, fort, temple, trek, region, etc.) that you know is in India, but it genuinely isn't one of the entries above. This is the MOST COMMON case when destinationId is null — most real Indian places are simply not in this list yet, and that is expected, not a sign the place is foreign. Set "outsideIndia": false, "recognizedIndianPlace": true, and put the actual place name you recognized in "recognizedPlaceName" (e.g. "Hampi" or "Spiti Valley") — do NOT set outsideIndia true just because it's missing from the list.
+3. Nothing specific enough to place at all — the request is too vague, generic, or unrelated to name any real place, in India or otherwise (e.g. "somewhere fun", "help me plan something"). Set "outsideIndia": false, "recognizedIndianPlace": false.
+
+Only return a non-null destinationId when the list above genuinely contains a reasonable match; otherwise return null and classify per the three cases above rather than forcing a bad match.
 
 Also pull out, only if explicitly stated or very strongly implied:
 - a number of days
@@ -289,11 +304,14 @@ Also pull out, only if explicitly stated or very strongly implied:
 Return ONLY a JSON object, no markdown fences, no commentary:
 {
   "destinationId": "<id from the list above, or null>",
+  "outsideIndia": <true or false — see case 1 above; only meaningful when destinationId is null>,
+  "recognizedIndianPlace": <true or false — see case 2 above; only meaningful when destinationId is null>,
+  "recognizedPlaceName": "<the real place name you recognized, if recognizedIndianPlace is true; otherwise null>",
   "days": <number or null>,
   "people": <number or null>,
   "style": "<backpacker|comfortable|premium|null>",
   "interests": [<zero or more of the fixed set above>],
-  "reasoning": "<one short sentence, shown to the user, explaining the match${hasImage ? " (mention what you recognized in the photo)" : ""} (or why nothing matched)>"
+  "reasoning": "<one short sentence, shown to the user, explaining the match${hasImage ? " (mention what you recognized in the photo)" : ""}, or — if destinationId is null — plainly saying which of the three cases above applies and why>"
 }`;
 }
 
@@ -324,6 +342,15 @@ router.post("/parse-intent", async (req, res) => {
     const destinationId = typeof parsed.destinationId === "string" && validIds.has(parsed.destinationId) ? parsed.destinationId : null;
     return res.json({
       destinationId,
+      // Both only meaningful when destinationId is null — see
+      // buildIntentPrompt's three-way rule for why "not in our list",
+      // "recognized as real but not in our list", and "genuinely not in
+      // India" must never collapse into the same client-side message.
+      // Both default false (i.e. "don't assume anything") if Gemini/Groq
+      // omitted or malformed the field.
+      outsideIndia: destinationId === null && parsed.outsideIndia === true,
+      recognizedIndianPlace: destinationId === null && parsed.outsideIndia !== true && parsed.recognizedIndianPlace === true,
+      recognizedPlaceName: destinationId === null && typeof parsed.recognizedPlaceName === "string" ? parsed.recognizedPlaceName : null,
       days: Number.isInteger(parsed.days) && parsed.days > 0 && parsed.days <= 30 ? parsed.days : null,
       people: Number.isInteger(parsed.people) && parsed.people > 0 && parsed.people <= 20 ? parsed.people : null,
       style: ["backpacker", "comfortable", "premium"].includes(parsed.style) ? parsed.style : null,
