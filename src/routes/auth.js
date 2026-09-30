@@ -16,6 +16,7 @@
 const crypto = require("node:crypto");
 const jwt = require("jsonwebtoken");
 const express = require("express");
+const { OAuth2Client } = require("google-auth-library");
 const db = require("../db");
 const { JWT_SECRET } = require("../auth-config");
 const requireAuth = require("../middleware/requireAuth");
@@ -24,6 +25,17 @@ const router = express.Router();
 
 const CODE_TTL_MINUTES = 10;
 const MAX_ATTEMPTS = 5;
+
+// One client ID per platform Google issues a distinct audience for
+// (expo-auth-session's iOS/Android/Web flows each get their own). Any of
+// these that isn't configured is simply not accepted as a valid audience.
+const GOOGLE_CLIENT_IDS = [
+  process.env.GOOGLE_IOS_CLIENT_ID,
+  process.env.GOOGLE_ANDROID_CLIENT_ID,
+  process.env.GOOGLE_WEB_CLIENT_ID,
+].filter(Boolean);
+
+const googleClient = new OAuth2Client();
 
 function hashCode(code) {
   return crypto.createHash("sha256").update(code).digest("hex");
@@ -82,6 +94,40 @@ router.post("/verify-code", (req, res) => {
   }
 
   db.prepare("DELETE FROM login_codes WHERE email = ?").run(email);
+
+  let user = db.prepare("SELECT * FROM users WHERE email = ?").get(email);
+  if (!user) {
+    const id = crypto.randomUUID();
+    db.prepare("INSERT INTO users (id, email, name) VALUES (?, ?, ?)").run(id, email, name);
+    user = db.prepare("SELECT * FROM users WHERE id = ?").get(id);
+  }
+
+  const token = jwt.sign({ sub: user.id }, JWT_SECRET, { expiresIn: "30d" });
+  res.json({ token, user: { id: user.id, email: user.email, name: user.name } });
+});
+
+// POST /auth/google { idToken } — sign in/up with a Google-issued ID token
+// (the client gets this from expo-auth-session, never a raw access token).
+router.post("/google", async (req, res) => {
+  const idToken = String(req.body?.idToken || "").trim();
+  if (!idToken) return res.status(400).json({ error: "Missing idToken." });
+  if (GOOGLE_CLIENT_IDS.length === 0) {
+    return res.status(500).json({ error: "Google sign-in isn't configured on this server." });
+  }
+
+  let payload;
+  try {
+    const ticket = await googleClient.verifyIdToken({ idToken, audience: GOOGLE_CLIENT_IDS });
+    payload = ticket.getPayload();
+  } catch {
+    return res.status(401).json({ error: "Invalid Google sign-in." });
+  }
+
+  if (!payload?.email || payload.email_verified !== true) {
+    return res.status(401).json({ error: "Google account has no verified email." });
+  }
+  const email = payload.email.trim().toLowerCase();
+  const name = payload.name ? String(payload.name).trim().slice(0, 80) : null;
 
   let user = db.prepare("SELECT * FROM users WHERE email = ?").get(email);
   if (!user) {
