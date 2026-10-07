@@ -35,6 +35,18 @@ db.exec(`
   -- slow — a few seconds per query) is hit at most once every
   -- CACHE_TTL_DAYS per destination, not on every user's page view. See
   -- routes/places.js.
+  -- Per-user memory of earlier AI requests (see lib/aiMemory.js). Saved
+  -- automatically for signed-in users only, read back only into that same
+  -- user's prompts, and deletable via routes/aiMemory.js.
+  CREATE TABLE IF NOT EXISTS ai_memory (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    content TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_ai_memory_user ON ai_memory (user_id, id);
+
   CREATE TABLE IF NOT EXISTS places_cache (
     destination_id TEXT PRIMARY KEY,
     payload TEXT NOT NULL,

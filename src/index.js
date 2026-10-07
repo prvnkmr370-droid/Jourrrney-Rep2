@@ -5,6 +5,7 @@ const authRoutes = require("./routes/auth");
 const profileRoutes = require("./routes/profile");
 const placesRoutes = require("./routes/places");
 const planTripRoutes = require("./routes/planTrip");
+const aiMemoryRoutes = require("./routes/aiMemory");
 
 const app = express();
 app.use(cors());
@@ -20,6 +21,7 @@ app.use("/auth", authRoutes);
 app.use("/profile", profileRoutes);
 app.use("/places", placesRoutes);
 app.use("/plan-trip", planTripRoutes);
+app.use("/ai-memory", aiMemoryRoutes);
 
 const PORT = process.env.PORT || 4000;
 // Bind to 0.0.0.0, not just localhost — the Expo Go app on your phone

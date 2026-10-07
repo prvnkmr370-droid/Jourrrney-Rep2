@@ -72,3 +72,13 @@ that means either paying for Render's persistent disk add-on, or swapping
 SQLite for a real hosted database (Render/Supabase/Neon all have free
 Postgres tiers) — ask to do that whenever you're ready to move past
 testing.
+
+## AI response rules and per-user memory
+
+All three AI routes (`POST /plan-trip/ai`, `/plan-trip/route-info`, `/plan-trip/parse-intent`) now go through `withGuidelines()` in `src/lib/aiMemory.js`:
+
+- **App-wide rules** (`APP_AI_GUIDELINES`): one fixed set of response instructions (honesty, no invented facts, road-vs-straight-line distances, women's-safety precautions, seasonal hazards and permits, inclusive tone, India-only scope) applied to **every** traveller, guests included. Edit that one string to change how the AI behaves everywhere.
+- **Per-user memory** (signed-in users only, saved automatically): the typed chat question, a one-line summary of each itinerary request, and each route lookup are stored in the `ai_memory` table (max 100 per user, 500 characters each, photos never stored). The 8 most recent are fed back into that same user's later prompts, wrapped as data (not instructions). Guests have no memory.
+- **Controls**: `GET /ai-memory` lists a user's own entries, `DELETE /ai-memory` clears them all, `DELETE /ai-memory/:id` removes one (all require sign-in). The app exposes this as Profile → Settings → "Clear AI history".
+- The AI routes use `middleware/optionalAuth.js`, so they stay open to guests but personalise for signed-in users when the app sends its `Authorization: Bearer` token (see `journey-app/src/screens/PlanTrip/aiRequest.ts`).
+- Privacy: update the app's privacy policy to mention that signed-in users' AI requests are stored to personalise answers and can be deleted from Settings.

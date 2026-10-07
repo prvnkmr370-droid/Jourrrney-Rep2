@@ -1,23 +1,28 @@
 /**
  * AI-generated trip itinerary — POST /plan-trip/ai
  *
- * Uses Google's Gemini API (free tier — see .env.example for how to get a
- * key) to actually generate an itinerary, replacing what used to be a
- * purely rule-based template (still lives in the app as generateItinerary()
- * in src/screens/PlanTrip/data.ts, and stays there as the final fallback
- * when AI is unavailable entirely). Gemini also has its own failsafe now:
- * on a Gemini failure, the same request is retried once against Groq's
- * free tier (see callAiJson below) before giving up to the local planner —
- * both free, no billing on either, so a single provider's "high demand"
- * 503 or an exhausted quota doesn't take AI planning down by itself.
+ * Calls an LLM to actually generate an itinerary, replacing what used to be
+ * a purely rule-based template (still lives in the app as
+ * generateItinerary() in src/screens/PlanTrip/data.ts, and stays there as
+ * the final fallback when AI is unavailable entirely).
+ *
+ * Multi-provider, tried in order until one succeeds (see callAiJson /
+ * buildProviderChain below): Gemini first (free, the established
+ * default), then Groq, then Claude as the last resort — each skipped
+ * automatically if its API key isn't set, so this works with just one
+ * provider configured all the way up to all three. A single provider's
+ * outage, "high demand" 503, or exhausted quota no longer takes AI
+ * planning down by itself. Adding another provider later (e.g. xAI's
+ * Grok) is one more entry in buildProviderChain — nothing else needs to
+ * change.
  *
  * The app already has all the destination data (see journey-app's
  * destinations.ts) — rather than duplicating that database here, the
  * client sends the relevant destination context inline in the request
  * body, and this route just turns it into a well-shaped prompt and asks
- * Gemini for structured JSON back in the same shape the app already
- * renders (GeneratedDay[] from data.ts), so the result slots into the
- * existing ResultStep UI unchanged.
+ * for structured JSON back in the same shape the app already renders
+ * (GeneratedDay[] from data.ts), so the result slots into the existing
+ * ResultStep UI unchanged.
  *
  * POST /plan-trip/ai
  * body: {
@@ -29,8 +34,17 @@
  */
 const express = require("express");
 const { GoogleGenAI } = require("@google/genai");
+const optionalAuth = require("../middleware/optionalAuth");
+const { withGuidelines, recordMemory } = require("../lib/aiMemory");
 
 const router = express.Router();
+
+// Anthropic's Messages API — see ANTHROPIC_API_KEY in .env.example. Plain
+// fetch, no SDK, same zero-new-dependency approach already used for Groq
+// below (Node's built-in fetch is enough for both).
+const CLAUDE_MODEL = "claude-sonnet-5-5";
+const CLAUDE_ENDPOINT = "https://api.anthropic.com/v1/messages";
+const CLAUDE_API_VERSION = "2023-06-01";
 
 // gemini-2.5-flash was retired — Google's own API error on that model id
 // points here. Verified working directly against the API before landing
@@ -39,13 +53,11 @@ const router = express.Router();
 const MODEL = "gemini-3.6-flash";
 
 // Groq (console.groq.com — the fast-inference company, unrelated to xAI's
-// "Grok") is the failsafe: on a Gemini failure (the free tier's occasional
-// "high demand" 503, a timeout, a quota blip), the SAME prompt is retried
-// here instead of giving up straight to the local rule-based fallback.
-// Text-only — Groq's free tier doesn't have a vision model verified
-// reliable enough for the photo-intent case, so image requests stay
-// Gemini-only (see hasFallback below). Both free tiers, no billing on
-// either — see GEMINI_API_KEY / GROQ_API_KEY in .env.example.
+// "Grok") — text-only, since Groq's free tier doesn't have a vision model
+// verified reliable enough for the photo-intent case (see supportsImage in
+// buildProviderChain). All three providers are free-tier/no-billing-
+// required to get started — see ANTHROPIC_API_KEY / GEMINI_API_KEY /
+// GROQ_API_KEY in .env.example.
 //
 // NOTE: llama-3.3-70b-versatile (Groq's own quickstart-doc example model)
 // is Enterprise-only as of this writing — console.groq.com/docs/models
@@ -57,13 +69,12 @@ const MODEL = "gemini-3.6-flash";
 const GROQ_MODEL = "openai/gpt-oss-120b";
 const GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions";
 
-// Shorter Gemini timeout when a Groq fallback is available (text-only
-// requests) — no point waiting the full budget on the primary when a
-// working secondary is one quick call away. The image path has no
-// fallback, so it keeps the old, longer budget.
-const GEMINI_TIMEOUT_MS_WITH_FALLBACK = 12000;
-const GEMINI_TIMEOUT_MS_NO_FALLBACK = 20000;
-const GROQ_TIMEOUT_MS = 10000;
+// Per-provider budget — up to 3 providers can run serially in the worst
+// case (all fail), so this stays well under the app's own client-side
+// timeouts (28-30s, see aiRequest.ts) even in that worst case.
+const CLAUDE_TIMEOUT_MS = 9000;
+const GEMINI_TIMEOUT_MS = 9000;
+const GROQ_TIMEOUT_MS = 7000;
 
 function buildPrompt(body) {
   const { destination: d, style: sc, days, people, preferences, origin, startDate, dailyBudget } = body;
@@ -94,15 +105,63 @@ Requirements:
 - Keep each field concise — this renders in a mobile app card, not a blog post.`;
 }
 
-// Shared by all routes below: calls Gemini in JSON mode, parses the
-// result, and throws a plain Error with a useful message on any failure
-// (no API key, timeout, non-JSON output) — callers turn that into the
-// appropriate HTTP response themselves. `contents` is either a plain
-// prompt string or a Part[] (text + inlineData) for the image-intent
-// route below — the SDK accepts both under the same `contents` field.
+// Claude sometimes wraps JSON in a markdown code fence even when told not
+// to — defensive stripping before JSON.parse rather than trusting every
+// provider to honor "no markdown fences" literally every time.
+function stripJsonFences(text) {
+  const trimmed = text.trim();
+  const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  return fenced ? fenced[1].trim() : trimmed;
+}
+
+// Calls Claude's Messages API in text (or text+image) mode and parses the
+// JSON out of its reply. `imagePart` is the same { base64, mimeType } shape
+// the route handlers already use for Gemini's inlineData — undefined for
+// every text-only route.
+async function callClaudeJson(promptText, imagePart, timeoutMs) {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw Object.assign(new Error("Claude isn't configured on this server (no ANTHROPIC_API_KEY)."), { status: 503 });
+
+  const content = imagePart
+    ? [
+        { type: "text", text: promptText },
+        { type: "image", source: { type: "base64", media_type: imagePart.mimeType, data: imagePart.base64 } },
+      ]
+    : promptText;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(CLAUDE_ENDPOINT, {
+      method: "POST",
+      signal: controller.signal,
+      headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": CLAUDE_API_VERSION },
+      body: JSON.stringify({ model: CLAUDE_MODEL, max_tokens: 2048, temperature: 0.6, messages: [{ role: "user", content }] }),
+    });
+    clearTimeout(timeout);
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      throw Object.assign(new Error(`Claude request failed (${res.status})`), { status: 502, detail });
+    }
+    const data = await res.json();
+    const text = data?.content?.find((block) => block.type === "text")?.text;
+    if (!text) throw new Error("Empty response from Claude");
+    try {
+      return JSON.parse(stripJsonFences(text));
+    } catch {
+      throw new Error("Claude returned non-JSON output");
+    }
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+// Calls Gemini in JSON mode and parses the result. `contents` is either a
+// plain prompt string or a Part[] (text + inlineData) for image requests —
+// the SDK accepts both under the same `contents` field.
 async function callGeminiJson(contents, timeoutMs) {
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw Object.assign(new Error("AI isn't configured on this server yet (no GEMINI_API_KEY)."), { status: 503 });
+  if (!apiKey) throw Object.assign(new Error("Gemini isn't configured on this server (no GEMINI_API_KEY)."), { status: 503 });
 
   const ai = new GoogleGenAI({ apiKey });
   const controller = new AbortController();
@@ -126,10 +185,9 @@ async function callGeminiJson(contents, timeoutMs) {
   }
 }
 
-// The failsafe: same job as callGeminiJson but against Groq's OpenAI-
-// compatible chat-completions endpoint (plain fetch — Groq needs no SDK,
-// keeping this a zero-new-dependency change). Text-only, since the
-// image/vision route never calls this (see hasFallback in each route).
+// Same job as the two above, against Groq's OpenAI-compatible
+// chat-completions endpoint (plain fetch — Groq needs no SDK). Text-only —
+// see supportsImage: false in buildProviderChain below.
 async function callGroqJson(promptText) {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) throw Object.assign(new Error("Groq isn't configured on this server (no GROQ_API_KEY)."), { status: 503 });
@@ -166,76 +224,248 @@ async function callGroqJson(promptText) {
   }
 }
 
-/**
- * Gemini-first, Groq-as-failsafe. `promptText` must be the same request
- * expressed as a plain string — Groq only takes text, so the image-intent
- * route passes `hasFallback: false` and this collapses to "just call
- * Gemini" for that case, unchanged from before. Whichever provider
- * actually answers is returned as `source` so callers/clients can tell
- * (and so it's visible in logs which free tier is carrying a given
- * request, useful for noticing if one side is rate-limited a lot).
- */
-async function callAiJson(geminiContents, promptText, hasFallback) {
-  try {
-    const result = await callGeminiJson(geminiContents, hasFallback ? GEMINI_TIMEOUT_MS_WITH_FALLBACK : GEMINI_TIMEOUT_MS_NO_FALLBACK);
-    return { result, source: "gemini" };
-  } catch (geminiErr) {
-    if (!hasFallback) throw geminiErr;
-    console.error("Gemini call failed, falling back to Groq:", geminiErr.message);
-    try {
-      const result = await callGroqJson(promptText);
-      return { result, source: "groq" };
-    } catch (groqErr) {
-      console.error("Groq fallback also failed:", groqErr.message);
-      // Surface the ORIGINAL Gemini error to the client (its status code is
-      // the more meaningful one — e.g. "no API key" vs Groq's own outage) —
-      // both having failed just means the caller falls through to the
-      // existing local rule-based planner, same contract as before. Attach
-      // the fallback attempt's own outcome too (non-secret — just error
-      // text) so it's visible in the response/logs rather than silently
-      // swallowed, which made a real Gemini+Groq double-failure look
-      // identical to "Groq was never tried" from the outside.
-      throw Object.assign(geminiErr, { groqAttempted: true, groqError: groqErr.message });
-    }
-  }
+// The provider chain itself — tried in this order until one succeeds.
+// Gemini stays primary (free, already the established default); Groq and
+// then Claude are the fallbacks for when Gemini's free-tier limit is hit
+// (a "high demand" 503, a timeout, or its daily quota) — Groq before
+// Claude since Groq is also free/no-card, so no billing is touched unless
+// both free options have failed too. A provider is skipped entirely if its
+// key isn't configured, or if this request carries an image and the
+// provider doesn't support vision (Groq doesn't — see supportsImage).
+// To add a new provider later (e.g. xAI's Grok — note: NOT the same as
+// Groq above, see the GROQ_MODEL comment), write its own callXJson() the
+// same shape as the three below and add one entry here; nothing else in
+// this file needs to change.
+function buildProviderChain(promptText, imagePart) {
+  return [
+    {
+      name: "gemini",
+      configured: !!process.env.GEMINI_API_KEY,
+      supportsImage: true,
+      call: (timeoutMs) =>
+        callGeminiJson(imagePart ? [{ text: promptText }, { inlineData: { data: imagePart.base64, mimeType: imagePart.mimeType } }] : promptText, timeoutMs),
+    },
+    { name: "groq", configured: !!process.env.GROQ_API_KEY, supportsImage: false, call: () => callGroqJson(promptText) },
+    { name: "claude", configured: !!process.env.ANTHROPIC_API_KEY, supportsImage: true, call: (timeoutMs) => callClaudeJson(promptText, imagePart, timeoutMs) },
+  ];
 }
 
-// GET /plan-trip/status — booleans only, never the actual key values.
-// Lets us (and you) confirm a just-added GROQ_API_KEY actually made it
-// into the live environment after a Render redeploy, without needing to
-// force a Gemini failure or expose any secret over the wire.
+const PROVIDER_TIMEOUT_MS = { claude: CLAUDE_TIMEOUT_MS, gemini: GEMINI_TIMEOUT_MS, groq: GROQ_TIMEOUT_MS };
+
+/**
+ * Tries each configured, image-capable (when needed) provider in order
+ * until one returns usable JSON. `imagePart` (optional, { base64,
+ * mimeType }) is the one thing every provider's call needs in the same
+ * shape — callers never build a provider-specific request themselves.
+ * Returns `{ result, source, attempted }` — `source` is whichever provider
+ * actually answered, `attempted` lists every provider tried before that
+ * (empty on a first-try success) so logs/responses show exactly what was
+ * tried, not just pass/fail. Throws the LAST provider's error (augmented
+ * with `.attempted`) only if every configured provider failed.
+ */
+async function callAiJson(promptText, imagePart) {
+  const chain = buildProviderChain(promptText, imagePart).filter((p) => p.configured && (!imagePart || p.supportsImage));
+  if (chain.length === 0) {
+    throw Object.assign(new Error("AI isn't configured on this server (set ANTHROPIC_API_KEY, GEMINI_API_KEY, or GROQ_API_KEY)."), { status: 503, attempted: [] });
+  }
+
+  const attempted = [];
+  let lastErr;
+  for (const provider of chain) {
+    try {
+      const result = await provider.call(PROVIDER_TIMEOUT_MS[provider.name]);
+      return { result, source: provider.name, attempted };
+    } catch (err) {
+      console.error(`${provider.name} call failed:`, err.message);
+      attempted.push({ provider: provider.name, error: err.message });
+      lastErr = err;
+    }
+  }
+  throw Object.assign(lastErr, { attempted });
+}
+
+// GET /plan-trip/status — booleans only, never the actual key values. Lets
+// us (and you) confirm a just-added API key actually made it into the live
+// environment after a redeploy, without needing to force a failure or
+// expose any secret over the wire.
 router.get("/status", (_req, res) => {
   res.json({
+    claude: { configured: !!process.env.ANTHROPIC_API_KEY, model: CLAUDE_MODEL },
     gemini: { configured: !!process.env.GEMINI_API_KEY, model: MODEL },
     groq: { configured: !!process.env.GROQ_API_KEY, model: GROQ_MODEL },
   });
 });
 
-router.post("/ai", async (req, res) => {
+router.post("/ai", optionalAuth, async (req, res) => {
   const { destination, style, days, people } = req.body || {};
   if (!destination?.name || !style?.label || !days || !people) {
     return res.status(400).json({ error: "destination, style, days, and people are required" });
   }
 
   try {
-    const prompt = buildPrompt(req.body);
-    // Always text-only here (no photo in this route) — the Groq failsafe
-    // always applies.
-    const { result: parsed, source } = await callAiJson(prompt, prompt, true);
+    const prompt = withGuidelines(buildPrompt(req.body), req.userId);
+    const { result: parsed, source } = await callAiJson(prompt);
     if (!Array.isArray(parsed.itinerary) || parsed.itinerary.length === 0) {
       throw new Error(`Malformed itinerary in ${source} response`);
     }
+    // Remember (signed-in users only) what was asked, so later answers can reflect it.
+    recordMemory(
+      req.userId,
+      "plan",
+      `Planned a ${days}-day ${style.label} trip to ${destination.name}, ${destination.state} for ${people} traveller(s)` +
+        (req.body.origin ? ` from ${req.body.origin}` : "") +
+        (Array.isArray(req.body.preferences) && req.body.preferences.length ? `; interests: ${req.body.preferences.join(", ")}` : "") +
+        (req.body.dailyBudget ? `; budget about ₹${req.body.dailyBudget} per person per day` : "")
+    );
     return res.json({ itinerary: parsed.itinerary, tips: Array.isArray(parsed.tips) ? parsed.tips : [], source });
   } catch (err) {
-    console.error("AI trip-plan generation failed (both Gemini and Groq):", err.message, err.groqAttempted ? `| groq: ${err.groqError}` : "| groq: not attempted");
+    console.error("AI trip-plan generation failed (all providers):", err.message, JSON.stringify(err.attempted ?? []));
     // 502 tells the app this specific call failed (not a client mistake) —
-    // it falls back to the local rule-based generator, so an outage on
-    // both free tiers never actually blocks trip planning.
+    // it falls back to the local rule-based generator, so an outage across
+    // every configured provider never actually blocks trip planning.
     return res.status(err.status ?? 502).json({
       error: "AI planning is temporarily unavailable — using the standard planner instead.",
       detail: err.message,
-      groqAttempted: !!err.groqAttempted,
-      groqError: err.groqError ?? null,
+      attempted: err.attempted ?? [],
+    });
+  }
+});
+
+/**
+ * POST /plan-trip/route-info — a complete door-to-door route from an
+ * arbitrary origin city to a destination, for each realistic mode.
+ * Generalizes what used to be hardcoded Delhi/Mumbai/Bangalore-only
+ * `Transport.fromDelhi` etc. strings in the app's destinations.ts — the
+ * app has no coordinate data for most of its ~1,787 destinations and no
+ * airport/station dataset, so rather than building either out, this asks
+ * Gemini/Groq for an approximate distance + a full per-mode journey
+ * (departure waypoint near the origin → arrival waypoint near the
+ * destination → last-mile leg to the actual destination) directly, same
+ * spirit as the app's existing hand-written transport text ("~1h direct",
+ * "₹2,500–₹9,000" — approximate, not survey-precise). This closes the loop
+ * that a bare "nearest airport to the origin" left open: the user also
+ * needs to know which airport/station to land at near the destination and
+ * how to cover that last stretch (taxi/bus/auto) to actually get there.
+ *
+ * body: { origin: string, destination: { name: string, state: string } }
+ */
+function buildRouteInfoPrompt(origin, destination) {
+  return `A traveller is starting their trip from ${origin}, India, and wants to reach ${destination.name}, ${destination.state}, India.
+
+Give a realistic, practical, COMPLETE door-to-door travel breakdown for this specific route — for each mode, the full chain from ${origin} all the way to ${destination.name}, not just one leg of it.
+
+Return ONLY a JSON object (no markdown fences, no commentary) with this exact shape:
+{
+  "distanceKm": <number, approximate straight-line/travel distance in km from ${origin} to ${destination.name}>,
+  "transport": [
+    {
+      "mode": "Flight",
+      "duration": "<total door-to-door estimate, ${origin} to ${destination.name}>",
+      "costRange": "<INR flight-fare range, per person one-way>",
+      "departurePoint": { "name": "<airport with scheduled flights nearest to ${origin}>", "code": "<3-letter IATA code>", "distanceFromOrigin": "<short string, e.g. '~12 km / 30 min by taxi'>" },
+      "arrivalPoint": { "name": "<airport nearest to ${destination.name} that this flight would land at>", "code": "<3-letter IATA code>", "distanceFromDestination": "<short string, e.g. '~15 km / 30 min'>" },
+      "lastMileOptions": [
+        { "mode": "Taxi/App cab", "duration": "<time from that airport to ${destination.name}>", "costRange": "<INR range>", "details": "<1 short sentence>" },
+        { "mode": "Airport bus/shuttle", "duration": "...", "costRange": "...", "details": "<1 short sentence — omit this option entirely if no such service realistically exists for this airport>" },
+        { "mode": "Auto-rickshaw", "duration": "...", "costRange": "...", "details": "<1 short sentence — omit if impractical for the distance involved>" }
+      ],
+      "details": "<1 short sentence on the flight leg itself — airline/stops/connections if relevant>",
+      "tips": "<1 short practical tip>"
+    },
+    {
+      "mode": "Train",
+      "duration": "...", "costRange": "...",
+      "departurePoint": { "name": "<railway station nearest to ${origin}>", "code": "<station code if well-known, else null>", "distanceFromOrigin": "..." },
+      "arrivalPoint": { "name": "<railway station nearest to ${destination.name}>", "code": "...", "distanceFromDestination": "..." },
+      "lastMileOptions": [
+        { "mode": "...", "duration": "...", "costRange": "...", "details": "..." }
+      ],
+      "details": "<which train(s)/route>", "tips": "..."
+    },
+    {
+      "mode": "Bus",
+      "duration": "...", "costRange": "...",
+      "departurePoint": { "name": "<main government/inter-state bus terminus (ISBT or state transport corporation stand) nearest to ${origin}>", "code": null, "distanceFromOrigin": "..." },
+      "arrivalPoint": { "name": "<main bus terminus nearest to ${destination.name}>", "code": null, "distanceFromDestination": "..." },
+      "lastMileOptions": [
+        { "mode": "...", "duration": "...", "costRange": "...", "details": "..." }
+      ],
+      "details": "<which state transport corporation(s)/operators run this route, e.g. volvo/sleeper/ordinary>", "tips": "..."
+    },
+    {
+      "mode": "Road",
+      "duration": "...", "costRange": "...",
+      "departurePoint": null, "arrivalPoint": null, "lastMileOptions": [],
+      "details": "<self-drive or private cab: the actual driving route — major highways/towns passed through>", "tips": "..."
+    }
+  ]
+}
+
+Requirements:
+- Only include a "transport" entry for a mode that's actually realistic for this route (e.g. omit "Train" if no sensible rail route exists, omit "Bus" if the distance is too long for a reasonable intercity bus journey); keep at least one entry.
+- "departurePoint"/"arrivalPoint" are null for "Road" (no transfer point — it's a direct self-drive/cab route) and required for "Flight"/"Train"/"Bus" when that mode is included.
+- "Bus" is specifically government/inter-state bus travel via a real bus terminus — distinct from "Road" (self-drive/private cab, no terminus). Don't merge the two.
+- "lastMileOptions" must cover how to travel the ACTUAL remaining distance from "arrivalPoint" to ${destination.name}, as a SHORT LIST of realistic alternatives (e.g. taxi/app cab, airport or railway/bus-stand shuttle, auto-rickshaw, local train/metro/local bus where relevant) so the traveller can pick one — not just a single mode. Give 1-3 options per Flight/Train/Bus entry depending on what's genuinely available at that arrival point and distance; never invent a bus/shuttle service that doesn't plausibly exist. Empty array only for Road, or for Flight/Train/Bus if the arrival point IS ${destination.name} itself (e.g. the terminus is effectively in the destination town).
+- Costs and durations are per-person, one-way, approximate — ranges are fine.
+- Keep every field concise — this renders in a mobile app card, not a blog post.`;
+}
+
+function sanitizeWaypoint(w, distanceKey) {
+  if (!w || typeof w.name !== "string") return null;
+  return {
+    name: w.name,
+    code: typeof w.code === "string" ? w.code : null,
+    [distanceKey]: typeof w[distanceKey] === "string" ? w[distanceKey] : "",
+  };
+}
+
+function sanitizeLastMileOptions(options) {
+  if (!Array.isArray(options)) return [];
+  return options
+    .filter((lm) => lm && typeof lm.mode === "string")
+    .map((lm) => ({
+      mode: lm.mode,
+      duration: typeof lm.duration === "string" ? lm.duration : "",
+      costRange: typeof lm.costRange === "string" ? lm.costRange : "",
+      details: typeof lm.details === "string" ? lm.details : "",
+    }));
+}
+
+router.post("/route-info", optionalAuth, async (req, res) => {
+  const { origin, destination } = req.body || {};
+  if (typeof origin !== "string" || !origin.trim() || !destination?.name || !destination?.state) {
+    return res.status(400).json({ error: "origin and destination.name/state are required" });
+  }
+
+  try {
+    const prompt = withGuidelines(buildRouteInfoPrompt(origin.trim(), destination), req.userId);
+    const { result: parsed, source } = await callAiJson(prompt);
+    if (typeof parsed.distanceKm !== "number" || !(parsed.distanceKm > 0) || !Array.isArray(parsed.transport) || parsed.transport.length === 0) {
+      throw new Error(`Malformed route-info in ${source} response`);
+    }
+    recordMemory(req.userId, "route", `Looked up how to reach ${destination.name}, ${destination.state} from ${origin.trim()}`);
+    return res.json({
+      distanceKm: parsed.distanceKm,
+      transport: parsed.transport
+        .filter((t) => t && typeof t.mode === "string")
+        .map((t) => ({
+          mode: t.mode,
+          duration: typeof t.duration === "string" ? t.duration : "",
+          costRange: typeof t.costRange === "string" ? t.costRange : "",
+          details: typeof t.details === "string" ? t.details : "",
+          tips: typeof t.tips === "string" ? t.tips : "",
+          departurePoint: sanitizeWaypoint(t.departurePoint, "distanceFromOrigin"),
+          arrivalPoint: sanitizeWaypoint(t.arrivalPoint, "distanceFromDestination"),
+          lastMileOptions: sanitizeLastMileOptions(t.lastMileOptions),
+        })),
+      source,
+    });
+  } catch (err) {
+    console.error("AI route-info generation failed (all providers):", err.message, JSON.stringify(err.attempted ?? []));
+    return res.status(err.status ?? 502).json({
+      error: "Couldn't fetch route details right now.",
+      detail: err.message,
+      attempted: err.attempted ?? [],
     });
   }
 });
@@ -315,7 +545,7 @@ Return ONLY a JSON object, no markdown fences, no commentary:
 }`;
 }
 
-router.post("/parse-intent", async (req, res) => {
+router.post("/parse-intent", optionalAuth, async (req, res) => {
   const { message, image, destinations } = req.body || {};
   const hasMessage = typeof message === "string" && message.trim().length > 0;
   const hasImage = !!(image && typeof image.base64 === "string" && typeof image.mimeType === "string");
@@ -330,16 +560,18 @@ router.post("/parse-intent", async (req, res) => {
     return res.status(400).json({ error: "image.mimeType must be an image/* type" });
   }
 
-  const prompt = buildIntentPrompt(hasMessage ? message.trim() : "", hasImage, destinations);
-  const contents = hasImage ? [{ text: prompt }, { inlineData: { data: image.base64, mimeType: image.mimeType } }] : prompt;
-  // The Groq failsafe only understands plain text — a photo request stays
-  // Gemini-only, same as before this change.
-  const hasFallback = !hasImage;
+  const prompt = withGuidelines(buildIntentPrompt(hasMessage ? message.trim() : "", hasImage, destinations), req.userId);
+  // Groq has no vision model in its free tier — a photo request only tries
+  // Claude/Gemini (both vision-capable), handled automatically by
+  // buildProviderChain's supportsImage filter once imagePart is passed.
+  const imagePart = hasImage ? { base64: image.base64, mimeType: image.mimeType } : undefined;
 
   try {
-    const { result: parsed, source } = await callAiJson(contents, prompt, hasFallback);
+    const { result: parsed, source } = await callAiJson(prompt, imagePart);
     const validIds = new Set(destinations.map((d) => d.id));
     const destinationId = typeof parsed.destinationId === "string" && validIds.has(parsed.destinationId) ? parsed.destinationId : null;
+    // Photos are never stored; only the typed text is remembered (signed-in users only).
+    if (hasMessage) recordMemory(req.userId, "question", message.trim());
     return res.json({
       destinationId,
       // Both only meaningful when destinationId is null — see
@@ -359,12 +591,11 @@ router.post("/parse-intent", async (req, res) => {
       source,
     });
   } catch (err) {
-    console.error("AI intent-parsing failed (both Gemini and Groq):", err.message, err.groqAttempted ? `| groq: ${err.groqError}` : "| groq: not attempted");
+    console.error("AI intent-parsing failed (all providers):", err.message, JSON.stringify(err.attempted ?? []));
     return res.status(err.status ?? 502).json({
       error: "Couldn't interpret that right now.",
       detail: err.message,
-      groqAttempted: !!err.groqAttempted,
-      groqError: err.groqError ?? null,
+      attempted: err.attempted ?? [],
     });
   }
 });
