@@ -76,9 +76,53 @@ const CLAUDE_TIMEOUT_MS = 9000;
 const GEMINI_TIMEOUT_MS = 9000;
 const GROQ_TIMEOUT_MS = 7000;
 
+// Places the app already knows for this destination (its own highlights and
+// nearby places), sent by the client as { name, type?, distance? }. Cleaned and
+// capped here because they come from the request body and end up in a prompt.
+const MAX_KNOWN_PLACES = 14;
+function sanitizeKnownPlaces(raw) {
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  for (const p of raw) {
+    const name = typeof p?.name === "string" ? p.name.replace(/\s+/g, " ").trim().slice(0, 80) : "";
+    if (!name) continue;
+    const type = typeof p?.type === "string" ? p.type.replace(/\s+/g, " ").trim().slice(0, 50) : "";
+    const distance = typeof p?.distance === "string" ? p.distance.replace(/\s+/g, " ").trim().slice(0, 40) : "";
+    out.push({ name, type, distance });
+    if (out.length >= MAX_KNOWN_PLACES) break;
+  }
+  return out;
+}
+
+// Stop names the model returned for one day: plain place names only, at most 4,
+// trimmed and de-duplicated. Anything that is not a short string is dropped, so
+// a malformed "stops" field can never break an otherwise good itinerary.
+const MAX_STOPS_PER_DAY = 4;
+function sanitizeStops(raw) {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set();
+  const out = [];
+  for (const item of raw) {
+    const name = typeof item === "string" ? item.replace(/\s+/g, " ").trim() : "";
+    if (!name || name.length > 80) continue;
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(name);
+    if (out.length >= MAX_STOPS_PER_DAY) break;
+  }
+  return out;
+}
+
 function buildPrompt(body) {
   const { destination: d, style: sc, days, people, preferences, origin, startDate, dailyBudget } = body;
   const prefsList = preferences?.length ? preferences.join(", ") : "general sightseeing";
+  const knownPlaces = sanitizeKnownPlaces(d.knownPlaces);
+  const knownBlock = knownPlaces.length
+    ? `\nPlaces our own ${d.name} guide already covers (use these exact names):\n${knownPlaces
+        .map((p) => `- ${p.name}${p.type || p.distance ? ` (${[p.type, p.distance].filter(Boolean).join(", ")})` : ""}`)
+        .join("\n")}\n`
+    : "";
   return `You are a travel planner creating a ${days}-day itinerary for ${people} traveller(s) visiting ${d.name}, ${d.state}, India, travelling in the "${sc.label}" style (transport: ${sc.transport}; stay: ${sc.stay}; local travel: ${sc.local}).
 
 Destination context: ${d.description}
@@ -88,11 +132,11 @@ Origin city: ${origin || "not specified"}
 Start date: ${startDate || "flexible"}
 Budget: roughly ₹${dailyBudget} per person per day.
 Women's safety rating for this destination: ${d.womenSafety?.score}/10 (${d.womenSafety?.level}).
-
+${knownBlock}
 Return ONLY a JSON object (no markdown fences, no commentary) with this exact shape:
 {
   "itinerary": [
-    { "day": 1, "title": "short day title", "morning": "1-2 sentences", "afternoon": "1-2 sentences", "evening": "1-2 sentences", "estimatedCost": <number, INR for all travellers that day> }
+    { "day": 1, "title": "short day title", "morning": "1-2 sentences", "afternoon": "1-2 sentences", "evening": "1-2 sentences", "stops": ["place name", "place name"], "estimatedCost": <number, INR for all travellers that day> }
   ],
   "tips": ["3-5 short, genuinely specific practical tips for this trip"]
 }
@@ -102,6 +146,7 @@ Requirements:
 - Ground every day in real, specific places/activities for ${d.name} — no generic filler like "explore the city".
 - Reflect the "${sc.label}" style and the traveller's stated interests (${prefsList}) in what you suggest.
 - estimatedCost figures should roughly total to about ₹${(dailyBudget * days * people).toLocaleString("en-IN")} across the whole trip, varying sensibly day to day.
+- "stops" lists the 1-4 attractions or activities the day actually visits, as plain place names (no hotels, no restaurants, no travel legs). When a stop is one of the guide places above, write its name exactly as listed. You may add another place only if you are confident it really exists in or near ${d.name}; never invent one.
 - Keep each field concise — this renders in a mobile app card, not a blog post.`;
 }
 
@@ -317,7 +362,8 @@ router.post("/ai", optionalAuth, async (req, res) => {
         (Array.isArray(req.body.preferences) && req.body.preferences.length ? `; interests: ${req.body.preferences.join(", ")}` : "") +
         (req.body.dailyBudget ? `; budget about ₹${req.body.dailyBudget} per person per day` : "")
     );
-    return res.json({ itinerary: parsed.itinerary, tips: Array.isArray(parsed.tips) ? parsed.tips : [], source });
+    const itinerary = parsed.itinerary.map((day) => ({ ...day, stops: sanitizeStops(day?.stops) }));
+    return res.json({ itinerary, tips: Array.isArray(parsed.tips) ? parsed.tips : [], source });
   } catch (err) {
     console.error("AI trip-plan generation failed (all providers):", err.message, JSON.stringify(err.attempted ?? []));
     // 502 tells the app this specific call failed (not a client mistake) —
