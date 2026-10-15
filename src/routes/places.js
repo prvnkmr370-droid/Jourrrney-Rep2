@@ -46,6 +46,41 @@ function setCached(destinationId, places) {
   ).run(destinationId, JSON.stringify(places));
 }
 
+// GET /places/hours?name=Rock%20Garden&state=Chandigarh&lat=30.75&lon=76.8
+// Live opening hours from Google Maps (see lib/googleHours.js for the terms
+// this is built around). 503 when no Google key is configured — the app then
+// shows its own curated hours instead.
+const googleHours = require("../lib/googleHours");
+const hoursHits = new Map(); // ip -> request timestamps, to protect the billed API
+const HOURS_PER_IP_PER_HOUR = 120;
+
+router.get("/hours", async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  const name = String(req.query.name || "").trim().slice(0, 120);
+  if (!name) return res.status(400).json({ error: "name is required" });
+  if (!googleHours.isConfigured()) {
+    return res.status(503).json({ error: "Google opening hours aren't configured on this server." });
+  }
+
+  const now = Date.now();
+  const ip = req.ip || "unknown";
+  const recent = (hoursHits.get(ip) || []).filter((t) => now - t < 60 * 60 * 1000);
+  if (recent.length >= HOURS_PER_IP_PER_HOUR) return res.status(429).json({ error: "Too many requests — try again later." });
+  recent.push(now);
+  hoursHits.set(ip, recent);
+
+  const lat = req.query.lat === undefined ? NaN : Number(req.query.lat);
+  const lon = req.query.lon === undefined ? NaN : Number(req.query.lon);
+  try {
+    const hit = await googleHours.lookup({ name, state: String(req.query.state || "").slice(0, 80), lat, lon });
+    if (!hit) return res.json({ found: false });
+    res.json({ found: true, placeName: hit.placeName, weekdayDescriptions: hit.weekdayDescriptions, source: "Google Maps" });
+  } catch (err) {
+    console.error(`[places/hours] ${err.message}${err.detail ? ` — ${err.detail}` : ""}`);
+    res.status(502).json({ error: "Couldn't load opening hours right now." });
+  }
+});
+
 router.get("/", async (req, res) => {
   const { destinationId, lat, lon, radius } = req.query;
   if (!destinationId || !lat || !lon) {
