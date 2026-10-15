@@ -10,12 +10,25 @@ services:
       # replaces the insecure "dev-only-secret-change-me" fallback in code.
       - key: JWT_SECRET
         generateValue: true
-      # Left as non-production for now so /auth/request-code still returns
-      # devCode in its response — there's no real email provider wired up
-      # yet, so this is the only way to actually sign in until one is
-      # added. Flip to "production" once real email delivery exists.
+      # With no email provider key below set, /auth/request-code still
+      # returns devCode so the app can sign in. Once RESEND_API_KEY or
+      # BREVO_API_KEY (plus EMAIL_FROM) is set, codes are emailed and
+      # devCode is never returned — flip this to "production" then, so a
+      # missing/broken provider fails closed (503) instead of silently
+      # falling back to the dev echo.
       - key: NODE_ENV
         value: development
+      # Email delivery for the sign-in code (src/lib/mailer.js). Set ONE of
+      # the two API keys, plus EMAIL_FROM, in the Render dashboard
+      # (Environment tab). Render's free tier blocks SMTP, so these are
+      # HTTPS email APIs. EMAIL_FROM must be an address the provider has
+      # verified, e.g.  Jourrrney <login@yourdomain.com>
+      - key: RESEND_API_KEY
+        sync: false
+      - key: BREVO_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
       # `sync: false` means Render won't try to auto-generate or require a
       # value at deploy time — it just leaves a blank slot to fill in
       # manually from the Render dashboard (Environment tab). Get a free

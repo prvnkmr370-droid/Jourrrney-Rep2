@@ -8,6 +8,9 @@ const planTripRoutes = require("./routes/planTrip");
 const aiMemoryRoutes = require("./routes/aiMemory");
 
 const app = express();
+// Render (and most hosts) put a proxy in front: trust one hop so req.ip is the
+// caller's address, which the sign-in code rate limit keys on.
+app.set("trust proxy", 1);
 app.use(cors());
 // Default express.json() body limit is ~100kb -- fine for every other
 // route here, but POST /plan-trip/parse-intent can now carry a base64-

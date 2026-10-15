@@ -12,7 +12,8 @@
 const path = require("node:path");
 const Database = require("better-sqlite3");
 
-const db = new Database(path.join(__dirname, "..", "data.sqlite"));
+// SQLITE_PATH lets tests (scripts/test-email-flow.js) use a throwaway file.
+const db = new Database(process.env.SQLITE_PATH || path.join(__dirname, "..", "data.sqlite"));
 db.pragma("journal_mode = WAL");
 
 db.exec(`

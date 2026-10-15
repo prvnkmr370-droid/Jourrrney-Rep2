@@ -27,13 +27,16 @@ Both need to be up for sign-in to work.
 - **Real**: the email → 6-digit-code flow is a genuine server-side
   challenge — the code is generated, hashed, and stored server-side, and
   wrong/expired codes are actually rejected. Sessions are real signed JWTs.
-- **Not real yet — no email is actually sent.** There's no email provider
-  wired up (see the honesty note at the top of `src/routes/auth.js`). The
-  code is logged to this server's console, and — only outside
-  `NODE_ENV=production` — echoed back to the app as `devCode` so you can
-  test the whole flow without an inbox. Before using this for real users,
-  plug in an email provider (Resend, SendGrid, Postmark, etc.) and remove
-  that dev-only echo.
+- **Email delivery is real once you configure a provider.** Set
+  `RESEND_API_KEY` *or* `BREVO_API_KEY`, plus `EMAIL_FROM`, and
+  `POST /auth/request-code` emails the code to the address the user typed
+  (`src/lib/mailer.js`). In that mode the code is never logged and never
+  returned to the app. Requests are throttled (one per 25 s and six per hour
+  per address, twenty per hour per IP). With **no** provider configured it
+  behaves as before: the code is logged and, outside `NODE_ENV=production`,
+  echoed back as `devCode`; in production it answers `503`. Render's free
+  tier blocks SMTP, so both providers are used over HTTPS. Check the whole
+  flow without any account: `node scripts/test-email-flow.js`.
 - **Not implemented**: Google/Apple/Facebook sign-in still just mark the
   user signed in locally in the app — those need real OAuth credentials
   from each provider (a Google Cloud project, an Apple Developer Program
