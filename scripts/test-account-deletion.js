@@ -66,13 +66,18 @@ async function main() {
 
   try {
     console.log("Legal pages");
-    for (const [p, phrase] of [["/privacy", "The short version"], ["/terms", "About Jourrrney"], ["/delete-account", "Delete your Jourrrney account"]]) {
+    for (const [p, phrase] of [["/", "Your guide to places across India"], ["/privacy", "The short version"], ["/terms", "About Jourrrney"], ["/delete-account", "Delete your Jourrrney account"]]) {
       const r = await fetch(BASE + p);
       const html = await r.text();
       assert.equal(r.status, 200); assert.match(r.headers.get("content-type"), /text\/html/); assert.match(html, new RegExp(phrase));
       assert.match(html, /name="viewport"/);
     }
-    ok("/privacy, /terms and /delete-account are public pages (no sign-in needed)");
+    ok("/, /privacy, /terms and /delete-account are public pages (no sign-in needed)");
+    const home = await (await fetch(BASE + "/")).text();
+    assert.match(home, /<title>Jourrrney \| Travel guide for India<\/title>/); assert.match(home, /name="description"/);
+    assert.match(home, /href="\/privacy"/); assert.match(home, /href="\/terms"/); assert.match(home, /href="\/delete-account"/);
+    assert.doesNotMatch(home, /Sign in with email|email sign-in/i);
+    ok("the home page has a title and description, says what the app does, and links to the privacy policy, terms and account deletion");
     const privacy = await (await fetch(BASE + "/privacy")).text();
     assert.match(privacy, /Last updated 26 October 2026/); assert.match(privacy, /do not sell your information/);
     assert.match(privacy, /mailto:help@example\.test/);

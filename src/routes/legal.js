@@ -1,7 +1,10 @@
 /**
  * Public web pages Google Play and Meta require: a Privacy Policy, Terms of
- * Service, and a page where anyone can delete their account without the app.
+ * Service, and a page where anyone can delete their account without the app,
+ * plus a home page (Google wants one before a Sign in with Google app can be
+ * published for everyone).
  *
+ *   GET /                the home page
  *   GET /privacy         the Privacy Policy
  *   GET /terms           the Terms of Service
  *   GET /delete-account  email + emailed code -> account and data deleted
@@ -41,13 +44,17 @@ h2{font-size:21px;line-height:1.3;margin:32px 0 8px}
 p,li{margin:0 0 12px}
 ul{padding-left:22px;margin:0 0 12px}
 .updated{color:var(--muted);font-size:15px;margin:0 0 8px}
+.lead{font-size:19px;line-height:1.6}
 a{color:var(--brand)}
 nav{margin-top:40px;padding-top:16px;border-top:1px solid var(--line);font-size:15px}
 nav a{margin-right:16px}
 `;
 
-function page(title, inner, { head = "", script = "" } = {}) {
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)} | Jourrrney</title><meta name="robots" content="index,follow"><style>${STYLE}${head}</style></head><body><main><p class="brand">JOURRRNEY</p>${inner}<nav><a href="/privacy">Privacy Policy</a><a href="/terms">Terms of Service</a><a href="/delete-account">Delete account</a></nav></main>${script}</body></html>`;
+function page(title, inner, { head = "", script = "", description = "" } = {}) {
+  // No title means the home page.
+  const pageTitle = title ? `${esc(title)} | Jourrrney` : "Jourrrney | Travel guide for India";
+  const meta = description ? `<meta name="description" content="${esc(description)}">` : "";
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${pageTitle}</title>${meta}<meta name="robots" content="index,follow"><style>${STYLE}${head}</style></head><body><main><p class="brand">JOURRRNEY</p>${inner}<nav><a href="/privacy">Privacy Policy</a><a href="/terms">Terms of Service</a><a href="/delete-account">Delete account</a></nav></main>${script}</body></html>`;
 }
 
 function renderBody(items) {
@@ -65,6 +72,30 @@ function renderDoc(doc) {
   const sections = doc.sections.map((s) => `<h2>${esc(s.heading)}</h2>${renderBody(s.body)}`).join("");
   return page(doc.title, `<h1>${esc(doc.title)}</h1><p class="updated">Last updated ${esc(UPDATED)}</p>${sections}`);
 }
+
+// The public home page. Google needs one before a Sign in with Google app can be published for everyone:
+// it must be reachable without signing in, say what the app does, and link to the privacy policy.
+const HOME_DESCRIPTION = "Jourrrney is a travel guide for places across India: practical tips, safety information and a trip planner.";
+router.get("/", (_req, res) => {
+  const inner = `
+<h1>Your guide to places across India</h1>
+<p class="lead">Jourrrney helps you decide where to go and how to get there. Browse more than 1,900 destinations, read practical tips and safety information for each one, and plan a trip with Tia, our trip planner.</p>
+
+<h2>What you can do</h2>
+<ul>
+  <li>Explore places by what you enjoy: heritage, beaches, nature and more.</li>
+  <li>See how to reach a place, where to stay, and what to know before you go.</li>
+  <li>Read safety guidance, including Her Journey, made for women travelling in India.</li>
+  <li>Plan a trip with Tia. Tia's replies are written by AI and can be wrong, so check the important details before you travel.</li>
+  <li>Sign in with Google or Facebook to save your favourite places.</li>
+</ul>
+
+<h2>Your information</h2>
+<p>We do not sell your information, show ads or use tracking tools. Read our <a href="/privacy">Privacy Policy</a> and <a href="/terms">Terms of Service</a>, or <a href="/delete-account">delete your account</a> at any time.</p>
+
+<p style="margin-top:28px">${contactHtml()}</p>`;
+  res.type("html").send(page("", inner, { description: HOME_DESCRIPTION }));
+});
 
 router.get("/privacy", (_req, res) => res.type("html").send(renderDoc(PRIVACY)));
 router.get("/terms", (_req, res) => res.type("html").send(renderDoc(TERMS)));
