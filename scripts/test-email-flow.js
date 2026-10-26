@@ -119,6 +119,27 @@ async function main() {
   assert.equal(r.json.devCode, undefined);
   step("no provider, production: 503 instead of pretending to send");
 
+  // 6b. On Render the code must never be shown, even if NODE_ENV was left on "development"
+  // (that was the live server's setting, and it showed every sign-in code to whoever asked).
+  process.env.NODE_ENV = "development";
+  process.env.RENDER = "true";
+  const logged = [];
+  const realLog = console.log;
+  console.log = (...args) => logged.push(args.join(" "));
+  try {
+    r = await post("/request-code", { email: "hosted@example.test" });
+  } finally {
+    console.log = realLog;
+  }
+  assert.equal(r.status, 503);
+  assert.equal(r.json.devCode, undefined);
+  assert.ok(!JSON.stringify(r.json).match(/\d{6}/), "no code anywhere in the response");
+  assert.ok(!logged.some((line) => /login code|\d{6}/i.test(line)), "the code must not be written to the server log either");
+  const row = require("better-sqlite3")(process.env.SQLITE_PATH, { readonly: true }).prepare("SELECT 1 FROM login_codes WHERE email = ?").get("hosted@example.test");
+  assert.equal(row, undefined, "no sign-in code is stored when nothing can be sent");
+  delete process.env.RENDER;
+  step("on Render with no provider, even with NODE_ENV=development: 503, no code returned, none logged, none stored");
+
   // 7. Bad address.
   r = await post("/request-code", { email: "not-an-email" });
   assert.equal(r.status, 400);

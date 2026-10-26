@@ -9,11 +9,14 @@
  * login code to the device that asked for it would defeat the point of a
  * second factor.
  *
- * With NO provider configured (local development) the old behaviour remains:
- * the code is logged to this server's console and, outside NODE_ENV=production,
- * echoed back as `devCode` so the flow is testable without an inbox. In
- * production with no provider, /request-code fails with 503 rather than
- * pretending to send something.
+ * With NO provider configured (local development only) the old behaviour
+ * remains: the code is logged to this server's console and echoed back as
+ * `devCode` so the flow is testable without an inbox. That is never allowed on a
+ * hosted server: when NODE_ENV=production, OR when running on Render (which sets
+ * RENDER=true on every service, whatever NODE_ENV says), /request-code instead
+ * fails with 503 rather than pretending to send something, and the code is
+ * neither returned nor logged. Echoing a code back would let anyone sign in as
+ * any email address.
  */
 const crypto = require("node:crypto");
 const jwt = require("jsonwebtoken");
@@ -96,8 +99,10 @@ router.post("/request-code", async (req, res) => {
   }
 
   const provider = configuredProvider();
-  const isProduction = process.env.NODE_ENV === "production";
-  if (!provider && isProduction) {
+  // "Hosted" is decided by the platform, not only by NODE_ENV: render.yaml used to leave NODE_ENV on
+  // "development", which made the live server show every sign-in code to whoever asked for it.
+  const isHosted = process.env.NODE_ENV === "production" || process.env.RENDER === "true";
+  if (!provider && isHosted) {
     console.error("[auth] /request-code called but no email provider is configured (set RESEND_API_KEY or BREVO_API_KEY + EMAIL_FROM)");
     return res.status(503).json({ error: "Email sign-in isn't available right now. Please try again later." });
   }
@@ -127,7 +132,7 @@ router.post("/request-code", async (req, res) => {
     return res.json({ ok: true });
   }
 
-  // Development fallback — no provider configured, not production.
+  // Development fallback — no provider configured, and not a hosted server (see isHosted above).
   console.log(`[auth] DEV login code for ${email}: ${code} (expires in ${CODE_TTL_MINUTES}m) — no email provider configured, nothing was sent`);
   res.json({ ok: true, devCode: code });
 });

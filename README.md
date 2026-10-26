@@ -32,9 +32,12 @@ Both need to be up for sign-in to work.
   `POST /auth/request-code` emails the code to the address the user typed
   (`src/lib/mailer.js`). In that mode the code is never logged and never
   returned to the app. Requests are throttled (one per 25 s and six per hour
-  per address, twenty per hour per IP). With **no** provider configured it
-  behaves as before: the code is logged and, outside `NODE_ENV=production`,
-  echoed back as `devCode`; in production it answers `503`. Render's free
+  per address, twenty per hour per IP). With **no** provider configured and
+  running on your own computer, the code is logged and echoed back as `devCode`
+  (handy for testing). On a hosted server (`NODE_ENV=production`, or on Render,
+  which sets `RENDER=true`) it answers `503` instead and email sign-in is off:
+  showing a code to the person asking would let anyone sign in as any email
+  address. Google and Facebook sign-in are unaffected. Render's free
   tier blocks SMTP, so both providers are used over HTTPS. Check the whole
   flow without any account: `node scripts/test-email-flow.js`.
 - **Facebook sign-in** is built (`src/routes/facebookAuth.js`) and switches on once `FACEBOOK_APP_ID` and `FACEBOOK_APP_SECRET` are set (see `.env.example`). Test it without Facebook: `node scripts/test-facebook-flow.js`.

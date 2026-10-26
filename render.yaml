@@ -10,14 +10,14 @@ services:
       # replaces the insecure "dev-only-secret-change-me" fallback in code.
       - key: JWT_SECRET
         generateValue: true
-      # With no email provider key below set, /auth/request-code still
-      # returns devCode so the app can sign in. Once RESEND_API_KEY or
-      # BREVO_API_KEY (plus EMAIL_FROM) is set, codes are emailed and
-      # devCode is never returned — flip this to "production" then, so a
-      # missing/broken provider fails closed (503) instead of silently
-      # falling back to the dev echo.
+      # "production" so a missing or broken email provider fails closed: with no
+      # RESEND_API_KEY / BREVO_API_KEY (plus EMAIL_FROM) set, /auth/request-code
+      # answers 503 and email sign-in is simply off. It used to be "development",
+      # which made the server show every sign-in code to whoever asked, i.e.
+      # anyone could sign in as any email address. (routes/auth.js also refuses to
+      # show codes on Render whatever this says.)
       - key: NODE_ENV
-        value: development
+        value: production
       # Email delivery for the sign-in code (src/lib/mailer.js). Set ONE of
       # the two API keys, plus EMAIL_FROM, in the Render dashboard
       # (Environment tab). Render's free tier blocks SMTP, so these are
