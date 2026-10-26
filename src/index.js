@@ -2,6 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const authRoutes = require("./routes/auth");
+const facebookAuthRoutes = require("./routes/facebookAuth");
 const profileRoutes = require("./routes/profile");
 const placesRoutes = require("./routes/places");
 const planTripRoutes = require("./routes/planTrip");
@@ -20,6 +21,7 @@ app.use(cors());
 app.use(express.json({ limit: "8mb" }));
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
+app.use("/auth/facebook", facebookAuthRoutes);
 app.use("/auth", authRoutes);
 app.use("/profile", profileRoutes);
 app.use("/places", placesRoutes);

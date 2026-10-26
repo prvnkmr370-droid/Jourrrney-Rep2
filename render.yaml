@@ -36,3 +36,14 @@ services:
       # falls back to its local planner if this is left unset.
       - key: GEMINI_API_KEY
         sync: false
+      # Sign in with Facebook (src/routes/facebookAuth.js). Fill in from the
+      # Meta for Developers dashboard; leave blank and the Facebook button in
+      # the app just says it isn't available yet. The secret stays here only.
+      - key: FACEBOOK_APP_ID
+        sync: false
+      - key: FACEBOOK_APP_SECRET
+        sync: false
+      - key: PUBLIC_BASE_URL
+        value: https://jourrrney-backend.onrender.com
+      - key: SUPPORT_EMAIL
+        sync: false

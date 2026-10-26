@@ -37,10 +37,11 @@ Both need to be up for sign-in to work.
   echoed back as `devCode`; in production it answers `503`. Render's free
   tier blocks SMTP, so both providers are used over HTTPS. Check the whole
   flow without any account: `node scripts/test-email-flow.js`.
-- **Not implemented**: Google/Apple/Facebook sign-in still just mark the
+- **Facebook sign-in** is built (`src/routes/facebookAuth.js`) and switches on once `FACEBOOK_APP_ID` and `FACEBOOK_APP_SECRET` are set (see `.env.example`). Test it without Facebook: `node scripts/test-facebook-flow.js`.
+- **Not implemented**: Google/Apple sign-in in the app still just mark the
   user signed in locally in the app — those need real OAuth credentials
   from each provider (a Google Cloud project, an Apple Developer Program
-  enrollment, a Facebook Developer app) that only you can create. Once you
+  enrollment) that only you can create. Once you
   have credentials for any of them, this backend can be extended to verify
   those tokens the same way it verifies the email code now.
 - **Not implemented**: profile data (bio, personal info, avatar), Safety
