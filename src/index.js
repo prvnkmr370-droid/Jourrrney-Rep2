@@ -3,6 +3,7 @@ const express = require("express");
 const cors = require("cors");
 const authRoutes = require("./routes/auth");
 const facebookAuthRoutes = require("./routes/facebookAuth");
+const googleAuthRoutes = require("./routes/googleAuth");
 const profileRoutes = require("./routes/profile");
 const placesRoutes = require("./routes/places");
 const planTripRoutes = require("./routes/planTrip");
@@ -25,6 +26,9 @@ app.get("/health", (_req, res) => res.json({ ok: true }));
 // Public web pages the app stores need: /privacy, /terms, /delete-account.
 app.use(legalRoutes);
 app.use("/auth/facebook", facebookAuthRoutes);
+// Mounted before /auth. It only answers /auth/google/status|start|callback|exchange, so the older
+// POST /auth/google { idToken } still falls through to authRoutes.
+app.use("/auth/google", googleAuthRoutes);
 app.use("/auth", authRoutes);
 app.use("/profile", profileRoutes);
 app.use("/places", placesRoutes);

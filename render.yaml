@@ -43,6 +43,13 @@ services:
         sync: false
       - key: FACEBOOK_APP_SECRET
         sync: false
+      # Sign in with Google (src/routes/googleAuth.js). Fill in from the Google
+      # Cloud console (OAuth client of type "Web application"); leave blank and
+      # the Google button just says it isn't available yet. Secret stays here only.
+      - key: GOOGLE_WEB_CLIENT_ID
+        sync: false
+      - key: GOOGLE_WEB_CLIENT_SECRET
+        sync: false
       - key: PUBLIC_BASE_URL
         value: https://jourrrney-backend.onrender.com
       - key: SUPPORT_EMAIL

@@ -28,19 +28,22 @@
  * A Facebook account can have no email (phone-only accounts, or the person
  * declines it). Accounts here are keyed by email, so those people are asked to
  * use email sign-in instead; nothing is created for them.
+ *
+ * The pieces shared with Google sign-in (cookie, one-time codes, the result
+ * page) live in lib/oauthLogin.js.
  */
 const crypto = require("node:crypto");
 const jwt = require("jsonwebtoken");
 const express = require("express");
 const db = require("../db");
 const { JWT_SECRET } = require("../auth-config");
+const { esc, readCookie, setStateCookie, sameBrowser, tooMany, createCodeStore, getJson, createAppPage, findOrCreateUserByEmail } = require("../lib/oauthLogin");
 
 const router = express.Router();
 
-const COOKIE = "fb_oauth";
+const COOKIE = { name: "fb_oauth", path: "/auth/facebook" };
 const STATE_TTL = "10m";
-const CODE_TTL_MS = 60 * 1000;
-const HTTP_TIMEOUT_MS = 8000;
+const codes = createCodeStore();
 
 /** Read on every request, so tests (and a Render env change) take effect without code changes. */
 function config() {
@@ -59,61 +62,6 @@ function config() {
 const isConfigured = (c) => c.appId !== "" && c.appSecret !== "";
 const callbackUrl = (c) => `${c.base}/auth/facebook/callback`;
 
-/* ---------- small helpers ---------- */
-
-const esc = (s) => String(s).replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]);
-
-function readCookie(req, name) {
-  const header = req.headers.cookie || "";
-  for (const part of header.split(";")) {
-    const i = part.indexOf("=");
-    if (i > 0 && part.slice(0, i).trim() === name) return decodeURIComponent(part.slice(i + 1).trim());
-  }
-  return null;
-}
-
-function setStateCookie(res, c, nonce, maxAgeSeconds) {
-  const secure = c.base.startsWith("https://") ? "; Secure" : "";
-  res.append("Set-Cookie", `${COOKIE}=${encodeURIComponent(nonce)}; HttpOnly; SameSite=Lax; Path=/auth/facebook; Max-Age=${maxAgeSeconds}${secure}`);
-}
-
-/** In-memory limits, fine for one server instance (as in routes/auth.js). */
-const hits = new Map();
-function tooMany(key, max, windowMs) {
-  const now = Date.now();
-  const list = (hits.get(key) || []).filter((t) => now - t < windowMs);
-  list.push(now);
-  hits.set(key, list);
-  return list.length > max;
-}
-
-/** One-time codes: code -> { userId, expires }. Used once, then gone. */
-const oneTimeCodes = new Map();
-function issueCode(userId) {
-  const now = Date.now();
-  for (const [k, v] of oneTimeCodes) if (v.expires < now) oneTimeCodes.delete(k);
-  const code = crypto.randomBytes(24).toString("base64url");
-  oneTimeCodes.set(code, { userId, expires: now + CODE_TTL_MS });
-  return code;
-}
-function redeemCode(code) {
-  const entry = oneTimeCodes.get(code);
-  oneTimeCodes.delete(code);
-  return entry && entry.expires >= Date.now() ? entry.userId : null;
-}
-
-async function getJson(url) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), HTTP_TIMEOUT_MS);
-  try {
-    const res = await fetch(url, { signal: controller.signal });
-    const body = await res.json().catch(() => ({}));
-    return { ok: res.ok, body };
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
 /** What the person sees in the browser, with a big button that opens the app. */
 const MESSAGES = {
   ok: ["You're signed in", "Opening the Jourrrney app…"],
@@ -124,16 +72,7 @@ const MESSAGES = {
   facebook_error: ["Facebook sign-in didn't work", "Facebook sent back an error. Please try again in a moment."],
   not_configured: ["Facebook sign-in isn't available yet", "Please sign in with your email in the app for now."],
 };
-
-function appPage(res, c, kind, query) {
-  const [title, text] = MESSAGES[kind] || MESSAGES.exchange;
-  const deepLink = `${c.scheme}://auth?${query || `error=${encodeURIComponent(kind)}`}`;
-  res.status(200).set({ "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" });
-  res.send(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title>
-<style>body{margin:0;font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:#0E1424;color:#F4EEE2;display:flex;min-height:100vh;align-items:center;justify-content:center;padding:24px}main{max-width:420px;text-align:center}h1{font-size:24px;line-height:1.3;margin:0 0 10px}p{font-size:17px;line-height:1.5;margin:0 0 24px;color:#D9D3C5}a{display:block;background:#D8B878;color:#0E1424;font-weight:700;font-size:18px;text-decoration:none;border-radius:14px;padding:16px}</style></head>
-<body><main><h1>${esc(title)}</h1><p>${esc(text)}</p><a href="${esc(deepLink)}">Open Jourrrney</a></main>
-<script>setTimeout(function(){window.location.href=${JSON.stringify(deepLink)}},150)</script></body></html>`);
-}
+const appPage = createAppPage({ messages: MESSAGES });
 
 /* ---------- routes ---------- */
 
@@ -146,11 +85,11 @@ router.get("/status", (_req, res) => {
 router.get("/start", (req, res) => {
   const c = config();
   if (!isConfigured(c)) return appPage(res, c, "not_configured");
-  if (tooMany(`start:${req.ip}`, 40, 60 * 60 * 1000)) return res.status(429).send("Too many attempts. Please try again later.");
+  if (tooMany(`fb:start:${req.ip}`, 40, 60 * 60 * 1000)) return res.status(429).send("Too many attempts. Please try again later.");
 
   const nonce = crypto.randomBytes(18).toString("base64url");
   const state = jwt.sign({ n: nonce, k: "fb" }, JWT_SECRET, { expiresIn: STATE_TTL });
-  setStateCookie(res, c, nonce, 600);
+  setStateCookie(res, c.base, COOKIE, nonce, 600);
   const url = new URL(c.dialog);
   url.searchParams.set("client_id", c.appId);
   url.searchParams.set("redirect_uri", callbackUrl(c));
@@ -165,13 +104,13 @@ router.get("/callback", async (req, res) => {
   const c = config();
   if (!isConfigured(c)) return appPage(res, c, "not_configured");
   // The cookie has done its job either way.
-  setStateCookie(res, c, "", 0);
+  setStateCookie(res, c.base, COOKIE, "", 0);
 
   if (req.query.error) return appPage(res, c, req.query.error === "access_denied" ? "cancelled" : "facebook_error");
 
   const code = String(req.query.code || "");
   const state = String(req.query.state || "");
-  const cookieNonce = readCookie(req, COOKIE);
+  const cookieNonce = readCookie(req, COOKIE.name);
   let stateNonce = null;
   try {
     const payload = jwt.verify(state, JWT_SECRET);
@@ -179,9 +118,7 @@ router.get("/callback", async (req, res) => {
   } catch {
     // expired or tampered
   }
-  const sameBrowser =
-    stateNonce && cookieNonce && stateNonce.length === cookieNonce.length && crypto.timingSafeEqual(Buffer.from(stateNonce), Buffer.from(cookieNonce));
-  if (!code || !sameBrowser) return appPage(res, c, "state");
+  if (!code || !sameBrowser(stateNonce, cookieNonce)) return appPage(res, c, "state");
 
   try {
     // 1. code -> access token (server to server, with the App Secret)
@@ -207,13 +144,8 @@ router.get("/callback", async (req, res) => {
     const name = me.body.name ? String(me.body.name).trim().slice(0, 80) : null;
 
     // 3. find or create the account, exactly as /auth/google does
-    let user = db.prepare("SELECT * FROM users WHERE email = ?").get(email);
-    if (!user) {
-      const id = crypto.randomUUID();
-      db.prepare("INSERT INTO users (id, email, name) VALUES (?, ?, ?)").run(id, email, name);
-      user = db.prepare("SELECT * FROM users WHERE id = ?").get(id);
-    }
-    return appPage(res, c, "ok", `code=${encodeURIComponent(issueCode(user.id))}`);
+    const user = findOrCreateUserByEmail(db, email, name);
+    return appPage(res, c, "ok", `code=${encodeURIComponent(codes.issue(user.id))}`);
   } catch (err) {
     console.error("Facebook sign-in failed:", err && err.name === "AbortError" ? "Facebook did not answer in time" : "unexpected error");
     return appPage(res, c, "exchange");
@@ -222,9 +154,9 @@ router.get("/callback", async (req, res) => {
 
 // POST /auth/facebook/exchange { code } — the app swaps the one-time code for the normal login.
 router.post("/exchange", (req, res) => {
-  if (tooMany(`exchange:${req.ip}`, 30, 10 * 60 * 1000)) return res.status(429).json({ error: "Too many attempts. Please try again later." });
+  if (tooMany(`fb:exchange:${req.ip}`, 30, 10 * 60 * 1000)) return res.status(429).json({ error: "Too many attempts. Please try again later." });
   const code = String(req.body?.code || "").trim();
-  const userId = code ? redeemCode(code) : null;
+  const userId = code ? codes.redeem(code) : null;
   const user = userId ? db.prepare("SELECT * FROM users WHERE id = ?").get(userId) : null;
   if (!user) return res.status(400).json({ error: "That sign-in has expired. Please try again." });
   const token = jwt.sign({ sub: user.id }, JWT_SECRET, { expiresIn: "30d" });
