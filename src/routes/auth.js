@@ -23,6 +23,7 @@ const db = require("../db");
 const { JWT_SECRET } = require("../auth-config");
 const requireAuth = require("../middleware/requireAuth");
 const { configuredProvider, sendLoginCode } = require("../lib/mailer");
+const { deleteAccountById, deleteAccountByEmail } = require("../lib/accountDeletion");
 
 const router = express.Router();
 
@@ -131,31 +132,43 @@ router.post("/request-code", async (req, res) => {
   res.json({ ok: true, devCode: code });
 });
 
+/**
+ * Checks the emailed code for this address and, if it is right, uses it up.
+ * Shared by sign-in and by deleting an account from the web page, so both
+ * get the same expiry and wrong-guess limits.
+ * @returns {{ ok: true } | { ok: false, status: number, error: string }}
+ */
+function consumeLoginCode(email, code) {
+  const row = db.prepare("SELECT * FROM login_codes WHERE email = ?").get(email);
+  if (!row) return { ok: false, status: 400, error: "Request a new code first." };
+
+  if (new Date(row.expires_at).getTime() < Date.now()) {
+    db.prepare("DELETE FROM login_codes WHERE email = ?").run(email);
+    return { ok: false, status: 400, error: "That code expired — request a new one." };
+  }
+
+  if (row.attempts >= MAX_ATTEMPTS) {
+    db.prepare("DELETE FROM login_codes WHERE email = ?").run(email);
+    return { ok: false, status: 429, error: "Too many attempts — request a new code." };
+  }
+
+  if (hashCode(code) !== row.code_hash) {
+    db.prepare("UPDATE login_codes SET attempts = attempts + 1 WHERE email = ?").run(email);
+    return { ok: false, status: 400, error: "Incorrect code." };
+  }
+
+  db.prepare("DELETE FROM login_codes WHERE email = ?").run(email);
+  return { ok: true };
+}
+
 // POST /auth/verify-code { email, code, name? }
 router.post("/verify-code", (req, res) => {
   const email = String(req.body?.email || "").trim().toLowerCase();
   const code = String(req.body?.code || "").trim();
   const name = req.body?.name ? String(req.body.name).trim().slice(0, 80) : null;
 
-  const row = db.prepare("SELECT * FROM login_codes WHERE email = ?").get(email);
-  if (!row) return res.status(400).json({ error: "Request a new code first." });
-
-  if (new Date(row.expires_at).getTime() < Date.now()) {
-    db.prepare("DELETE FROM login_codes WHERE email = ?").run(email);
-    return res.status(400).json({ error: "That code expired — request a new one." });
-  }
-
-  if (row.attempts >= MAX_ATTEMPTS) {
-    db.prepare("DELETE FROM login_codes WHERE email = ?").run(email);
-    return res.status(429).json({ error: "Too many attempts — request a new code." });
-  }
-
-  if (hashCode(code) !== row.code_hash) {
-    db.prepare("UPDATE login_codes SET attempts = attempts + 1 WHERE email = ?").run(email);
-    return res.status(400).json({ error: "Incorrect code." });
-  }
-
-  db.prepare("DELETE FROM login_codes WHERE email = ?").run(email);
+  const checked = consumeLoginCode(email, code);
+  if (!checked.ok) return res.status(checked.status).json({ error: checked.error });
 
   let user = db.prepare("SELECT * FROM users WHERE email = ?").get(email);
   if (!user) {
@@ -200,6 +213,30 @@ router.post("/google", async (req, res) => {
 
   const token = jwt.sign({ sub: user.id }, JWT_SECRET, { expiresIn: "30d" });
   res.json({ token, user: { id: user.id, email: user.email, name: user.name } });
+});
+
+// DELETE /auth/account — the signed-in person deletes their own account and
+// everything the server keeps about them (see lib/accountDeletion.js).
+router.delete("/account", requireAuth, (req, res) => {
+  if (!deleteAccountById(req.userId)) return res.status(404).json({ error: "Account not found." });
+  res.json({ ok: true });
+});
+
+// POST /auth/delete-with-code { email, code } — the same deletion for someone
+// who no longer has the app (the public /delete-account page). They prove the
+// address is theirs with a code from POST /auth/request-code first.
+router.post("/delete-with-code", (req, res) => {
+  const email = String(req.body?.email || "").trim().toLowerCase();
+  const code = String(req.body?.code || "").trim();
+  if (!isValidEmail(email)) return res.status(400).json({ error: "Enter a valid email address." });
+
+  const checked = consumeLoginCode(email, code);
+  if (!checked.ok) return res.status(checked.status).json({ error: checked.error });
+
+  if (!deleteAccountByEmail(email)) {
+    return res.status(404).json({ error: "We couldn't find a Jourrrney account for that email address. Nothing was deleted." });
+  }
+  res.json({ ok: true });
 });
 
 // GET /auth/me — requires Authorization: Bearer <token>

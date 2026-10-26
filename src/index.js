@@ -7,6 +7,7 @@ const profileRoutes = require("./routes/profile");
 const placesRoutes = require("./routes/places");
 const planTripRoutes = require("./routes/planTrip");
 const aiMemoryRoutes = require("./routes/aiMemory");
+const legalRoutes = require("./routes/legal");
 
 const app = express();
 // Render (and most hosts) put a proxy in front: trust one hop so req.ip is the
@@ -21,6 +22,8 @@ app.use(cors());
 app.use(express.json({ limit: "8mb" }));
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
+// Public web pages the app stores need: /privacy, /terms, /delete-account.
+app.use(legalRoutes);
 app.use("/auth/facebook", facebookAuthRoutes);
 app.use("/auth", authRoutes);
 app.use("/profile", profileRoutes);

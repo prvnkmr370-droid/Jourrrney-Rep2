@@ -38,6 +38,8 @@ Both need to be up for sign-in to work.
   tier blocks SMTP, so both providers are used over HTTPS. Check the whole
   flow without any account: `node scripts/test-email-flow.js`.
 - **Facebook sign-in** is built (`src/routes/facebookAuth.js`) and switches on once `FACEBOOK_APP_ID` and `FACEBOOK_APP_SECRET` are set (see `.env.example`). Test it without Facebook: `node scripts/test-facebook-flow.js`.
+- **Account deletion** (required by Google Play): `DELETE /auth/account` for a signed-in person, and the public page `/delete-account` (email + emailed code, `POST /auth/delete-with-code`) for someone without the app. Both remove the user, their AI history and any waiting sign-in code in one transaction, and a deleted account's old token stops working at once. Test: `node scripts/test-account-deletion.js` (about 30 s).
+- **Public legal pages**: `/privacy`, `/terms`, `/delete-account` (what Google Play and Meta link to). The wording lives once in `src/legal/content.js`; after changing it run `node scripts/export-legal-for-app.js` to copy it into the app's screens. They show `SUPPORT_EMAIL` as the contact address; set it on Render.
 - **Not implemented**: Google/Apple sign-in in the app still just mark the
   user signed in locally in the app — those need real OAuth credentials
   from each provider (a Google Cloud project, an Apple Developer Program

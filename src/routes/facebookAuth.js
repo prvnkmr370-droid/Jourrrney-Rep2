@@ -234,12 +234,13 @@ router.post("/exchange", (req, res) => {
 // GET /auth/facebook/data-deletion — the page Meta asks for ("Data Deletion Instructions URL").
 router.get("/data-deletion", (_req, res) => {
   const c = config();
+  const self = `<a href="${esc(c.base)}/delete-account">${esc(c.base)}/delete-account</a>`;
   const how = c.support
-    ? `Email <a href="mailto:${esc(c.support)}">${esc(c.support)}</a> from the address you signed in with, and we will delete your account and everything saved with it.`
-    : "Send us a deletion request from the address you signed in with, and we will delete your account and everything saved with it. (The contact address is being added here.)";
+    ? `The quickest way is to delete it yourself at ${self}, or in the app under Profile, Settings, Delete my account. You can also email <a href="mailto:${esc(c.support)}">${esc(c.support)}</a> from the address you signed in with.`
+    : `The quickest way is to delete it yourself at ${self}, or in the app under Profile, Settings, Delete my account.`;
   res.type("html").send(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Delete your Jourrrney data</title>
 <style>body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:560px;margin:40px auto;padding:0 20px;line-height:1.6;color:#1b1b1b}h1{font-size:24px}</style></head>
-<body><h1>Delete your Jourrrney data</h1><p>If you signed in to Jourrrney with Facebook, we keep your name, your email address, your saved places and trips, and the questions you asked Tia.</p><p>${how}</p><p>We never post to your Facebook account and we do not see your Facebook password.</p></body></html>`);
+<body><h1>Delete your Jourrrney data</h1><p>If you signed in to Jourrrney with Facebook, we keep your name, your email address, the profile details you added, and a short history of the questions you asked Tia. Places and trips you saved are kept only on your phone.</p><p>${how}</p><p>We never post to your Facebook account and we do not see your Facebook password.</p></body></html>`);
 });
 
 module.exports = router;
