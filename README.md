@@ -92,3 +92,17 @@ All three AI routes (`POST /plan-trip/ai`, `/plan-trip/route-info`, `/plan-trip/
 - **Controls**: `GET /ai-memory` lists a user's own entries, `DELETE /ai-memory` clears them all, `DELETE /ai-memory/:id` removes one (all require sign-in). The app exposes this as Profile → Settings → "Clear AI history".
 - The AI routes use `middleware/optionalAuth.js`, so they stay open to guests but personalise for signed-in users when the app sends its `Authorization: Bearer` token (see `journey-app/src/screens/PlanTrip/aiRequest.ts`).
 - Privacy: update the app's privacy policy to mention that signed-in users' AI requests are stored to personalise answers and can be deleted from Settings.
+
+## Free AI prompts for guests
+
+Signing in is never required to use the app, but AI is what an account unlocks. The three AI routes also go through `aiGuestGate` (`src/middleware/aiGuestLimit.js`), after `optionalAuth`:
+
+- **Signed in** (a valid token): not limited here.
+- **A guest** gets `AI_GUEST_PROMPT_LIMIT` free prompts (5 unless set). Past that the route answers `403 { code: "guest_limit" }` and the app offers sign-in. Nothing that is not AI is limited.
+- **One prompt** is one thing the person did: the app sends the same `X-AI-Prompt-Id` on every AI call that belongs to it (a trip with three stops makes three calls, still one prompt). A call with no id counts as its own prompt. A prompt that was already counted can always finish.
+- **Only answered calls count.** An AI outage never uses up free prompts.
+- **Whose count:** the phone's random id (`X-Device-Id`, made and kept by the app). A call without a valid one is counted against its network address, so an old app or a script cannot dodge the limit by leaving it out. A looser safety net, `AI_GUEST_IP_DAILY_CAP` (60 a day, in memory), answers `429 { code: "guest_ip_limit" }` when one address floods the guest AI.
+- `GET /plan-trip/ai-access` says how many free prompts this phone has left (no AI call). Successful guest answers also carry `guest: { used, limit, remaining }`.
+- The counts are in the `ai_guest_prompts` table. While the database is wiped on every restart (Render's free plan), counts start again after a restart: a few extra free prompts, nothing more.
+- `node scripts/test-ai-guest-limit.js` checks all of this against a throwaway copy of the server and a fake AI (18 checks).
+- The privacy policy (`src/legal/content.js`) says the random id and the count are kept; run `node scripts/export-legal-for-app.js` after changing it.

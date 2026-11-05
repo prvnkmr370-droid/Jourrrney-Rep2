@@ -31,6 +31,7 @@ const PRIVACY = {
             "If you sign in, we keep your email address and name so you can get back to your account.",
             "We do not sell your information, show ads, or use tracking or analytics tools.",
             "What you type to Tia, our trip planner, is sent to AI services so they can write an answer.",
+            "A few AI prompts are free without an account. To count them, the app uses a random number that stays on your phone and is not linked to you.",
             "You can delete your account and everything we keep about you at any time.",
           ],
         },
@@ -62,6 +63,14 @@ const PRIVACY = {
         "To answer you, the app sends your message, the place you are travelling to and from, how many of you are going, and the other trip details you chose, to our server. Our server passes them to AI services (currently Google Gemini and Groq) which write the reply. We do not send your name or email address to them.",
         "Please do not type private details such as passwords, bank details or ID numbers into the chat.",
         "If you are signed in, we also save a short note of what you asked (see above). If you are not signed in, nothing you ask is remembered.",
+      ],
+    },
+    {
+      heading: "Free AI prompts without an account",
+      body: [
+        "You can use a few AI prompts before you sign in (currently 5). To count them, the app makes a random number that stays on your phone. It is not your name or your email address, and it is not linked to an account. The app sends it with each AI request, and our server keeps it together with how many free prompts it has counted.",
+        "If an older version of the app does not send that number, our server counts by your network address (IP address) instead, and it also looks at your network address for a day to stop automated misuse.",
+        "If you sign in, the limit no longer applies.",
       ],
     },
     {
@@ -109,7 +118,7 @@ const PRIVACY = {
     {
       heading: "How long we keep it",
       body: [
-        "We keep your account information until you delete your account. Your AI history keeps your latest 100 notes until you clear it or delete your account. Server logs are kept by our host for a short time only.",
+        "We keep your account information until you delete your account. Your AI history keeps your latest 100 notes until you clear it or delete your account. The random number for free AI prompts, and its count, are kept on our server and are not linked to any account. Server logs are kept by our host for a short time only.",
       ],
     },
     {

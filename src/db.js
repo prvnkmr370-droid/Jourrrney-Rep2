@@ -48,6 +48,16 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_ai_memory_user ON ai_memory (user_id, id);
 
+  -- Free AI prompts used by people who are not signed in (see middleware/aiGuestLimit.js).
+  -- One row per prompt, keyed by the phone's random id (or its network address when it sent none);
+  -- a prompt that needs several AI calls (a trip with several stops) is still one row.
+  CREATE TABLE IF NOT EXISTS ai_guest_prompts (
+    device_key TEXT NOT NULL,
+    prompt_id TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (device_key, prompt_id)
+  );
+
   CREATE TABLE IF NOT EXISTS places_cache (
     destination_id TEXT PRIMARY KEY,
     payload TEXT NOT NULL,

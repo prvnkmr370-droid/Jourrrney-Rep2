@@ -35,6 +35,7 @@
 const express = require("express");
 const { GoogleGenAI } = require("@google/genai");
 const optionalAuth = require("../middleware/optionalAuth");
+const { aiGuestGate, aiAccessStatus } = require("../middleware/aiGuestLimit");
 const { withGuidelines, recordMemory } = require("../lib/aiMemory");
 
 const router = express.Router();
@@ -43,7 +44,7 @@ const router = express.Router();
 // fetch, no SDK, same zero-new-dependency approach already used for Groq
 // below (Node's built-in fetch is enough for both).
 const CLAUDE_MODEL = "claude-sonnet-5-5";
-const CLAUDE_ENDPOINT = "https://api.anthropic.com/v1/messages";
+const CLAUDE_ENDPOINT = process.env.ANTHROPIC_API_URL || "https://api.anthropic.com/v1/messages"; // ANTHROPIC_API_URL is only for tests
 const CLAUDE_API_VERSION = "2023-06-01";
 
 // gemini-2.5-flash was retired — Google's own API error on that model id
@@ -341,7 +342,10 @@ router.get("/status", (_req, res) => {
   });
 });
 
-router.post("/ai", optionalAuth, async (req, res) => {
+// How many free AI prompts a guest has left (no AI call).
+router.get("/ai-access", optionalAuth, aiAccessStatus);
+
+router.post("/ai", optionalAuth, aiGuestGate, async (req, res) => {
   const { destination, style, days, people } = req.body || {};
   if (!destination?.name || !style?.label || !days || !people) {
     return res.status(400).json({ error: "destination, style, days, and people are required" });
@@ -477,7 +481,7 @@ function sanitizeLastMileOptions(options) {
     }));
 }
 
-router.post("/route-info", optionalAuth, async (req, res) => {
+router.post("/route-info", optionalAuth, aiGuestGate, async (req, res) => {
   const { origin, destination } = req.body || {};
   if (typeof origin !== "string" || !origin.trim() || !destination?.name || !destination?.state) {
     return res.status(400).json({ error: "origin and destination.name/state are required" });
@@ -591,7 +595,7 @@ Return ONLY a JSON object, no markdown fences, no commentary:
 }`;
 }
 
-router.post("/parse-intent", optionalAuth, async (req, res) => {
+router.post("/parse-intent", optionalAuth, aiGuestGate, async (req, res) => {
   const { message, image, destinations } = req.body || {};
   const hasMessage = typeof message === "string" && message.trim().length > 0;
   const hasImage = !!(image && typeof image.base64 === "string" && typeof image.mimeType === "string");
