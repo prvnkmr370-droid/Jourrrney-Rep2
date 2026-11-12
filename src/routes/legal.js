@@ -28,8 +28,8 @@ function supportEmail() {
 function contactHtml() {
   const mail = supportEmail();
   return mail
-    ? `Questions about your information? Email us at <a href="mailto:${esc(mail)}">${esc(mail)}</a>.`
-    : "Questions about your information? Use the contact email shown on Jourrrney's Google Play page.";
+    ? `Questions, requests or complaints? Email us at <a href="mailto:${esc(mail)}">${esc(mail)}</a>.`
+    : "Questions, requests or complaints? Use the contact email shown on Jourrrney's Google Play page.";
 }
 
 const STYLE = `
@@ -87,7 +87,7 @@ router.get("/", (_req, res) => {
   <li>See how to reach a place, where to stay, and what to know before you go.</li>
   <li>Read safety guidance, including Her Journey, made for women travelling in India.</li>
   <li>Plan a trip with Tia. Tia's replies are written by AI and can be wrong, so check the important details before you travel.</li>
-  <li>Sign in with Google or Facebook to save your favourite places.</li>
+  <li>Sign in with Google or Facebook to save your favourite places and to use Tia's AI answers.</li>
 </ul>
 
 <h2>Your information</h2>

@@ -1,9 +1,14 @@
 /**
- * Free AI prompts for people who are not signed in.
+ * Who may use the AI: signed-in people only, by default.
  *
- * Signing in is never required to use the app, but the AI is what an account unlocks: a guest gets a few free
- * AI prompts (AI_GUEST_PROMPT_LIMIT, 5 unless set) and then needs to sign in to keep using AI. Everything that
+ * Signing in is never required to use the rest of the app, but the AI is what an account unlocks. With
+ * AI_GUEST_PROMPT_LIMIT unset (or 0) a guest cannot use the AI at all: every AI call without a valid sign-in is
+ * refused with code "login_required", nothing is counted or stored, and no AI provider is called. Everything that
  * is not AI is untouched, and a signed-in person is not limited here.
+ *
+ * Setting AI_GUEST_PROMPT_LIMIT to a number (say 5) switches on the older "free taste" mode described below:
+ * a guest gets that many free AI prompts and then needs to sign in. It is kept so the decision can be reversed
+ * with one setting, not by new code.
  *
  * What counts as one prompt: the app sends the same X-AI-Prompt-Id on every AI call that belongs to one thing the
  * person did (a trip with three stops makes three calls, still one prompt). A call with no id counts as its own
@@ -34,7 +39,7 @@ function number(name, fallback) {
   const n = Number.parseInt(process.env[name] ?? "", 10);
   return Number.isFinite(n) && n >= 0 ? n : fallback;
 }
-const guestLimit = () => number("AI_GUEST_PROMPT_LIMIT", 5);
+const guestLimit = () => number("AI_GUEST_PROMPT_LIMIT", 0);
 const ipDailyCap = () => number("AI_GUEST_IP_DAILY_CAP", 60);
 
 function guestKey(req) {
@@ -67,6 +72,10 @@ function aiGuestGate(req, res, next) {
   if (req.userId) return next(); // signed in: not limited here
 
   const limit = guestLimit();
+  // Sign-in required: refuse before anything is looked up, counted or stored.
+  if (limit === 0) {
+    return res.status(403).json({ code: "login_required", error: "Sign in to use AI. It's free.", limit: 0, used: 0 });
+  }
   const key = guestKey(req);
   const promptId = promptIdOf(req);
   const already = !!hasPrompt.get(key, promptId);
@@ -96,10 +105,15 @@ function aiGuestGate(req, res, next) {
   next();
 }
 
-/** GET /plan-trip/ai-access: how many free AI prompts this phone has left (a signed-in person has no limit). Calls no AI. */
+/**
+ * GET /plan-trip/ai-access: can this caller use the AI? A signed-in person: yes. A guest: how many free prompts are
+ * left (limit 0 means none: sign in first). Calls no AI.
+ */
 function aiAccessStatus(req, res) {
   if (req.userId) return res.json({ signedIn: true });
-  return res.json({ signedIn: false, ...summary(guestKey(req), guestLimit()) });
+  const limit = guestLimit();
+  if (limit === 0) return res.json({ signedIn: false, used: 0, limit: 0, remaining: 0 });
+  return res.json({ signedIn: false, ...summary(guestKey(req), limit) });
 }
 
 module.exports = { aiGuestGate, aiAccessStatus };

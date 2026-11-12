@@ -1,5 +1,6 @@
 /**
- * End-to-end check of the free-AI-prompts limit for people who are not signed in:
+ * End-to-end check of who may use the AI. By default a guest cannot (sign-in required); with AI_GUEST_PROMPT_LIMIT
+ * set to a number a guest gets that many free prompts first. Both modes are checked:
  *
  *   node scripts/test-ai-guest-limit.js
  *
@@ -14,9 +15,10 @@ const crypto = require("node:crypto");
 const { spawn } = require("node:child_process");
 const assert = require("node:assert/strict");
 
-const AI_PORT = 4510, MAIN_PORT = 4511, CAP_PORT = 4512;
+const AI_PORT = 4510, MAIN_PORT = 4511, CAP_PORT = 4512, LOGIN_PORT = 4513;
 const dbFile = path.join(os.tmpdir(), `journey-ai-limit-test-${process.pid}.sqlite`);
 const capDbFile = path.join(os.tmpdir(), `journey-ai-limit-cap-test-${process.pid}.sqlite`);
+const loginDbFile = path.join(os.tmpdir(), `journey-ai-limit-login-test-${process.pid}.sqlite`);
 
 /* ---- a fake AI (answers like Anthropic's Messages API) ---- */
 let aiCalls = 0, aiFailNext = false;
@@ -87,10 +89,12 @@ async function check(name, fn) {
 
 (async () => {
   await new Promise((r) => ai.listen(AI_PORT, "127.0.0.1", r));
-  const main = start(MAIN_PORT, dbFile, { AI_GUEST_IP_DAILY_CAP: "1000" });
-  const cap = start(CAP_PORT, capDbFile, { AI_GUEST_IP_DAILY_CAP: "3" });
+  // main and cap: the optional "free taste" mode (5 free prompts). login: the default, sign-in required.
+  const main = start(MAIN_PORT, dbFile, { AI_GUEST_PROMPT_LIMIT: "5", AI_GUEST_IP_DAILY_CAP: "1000" });
+  const cap = start(CAP_PORT, capDbFile, { AI_GUEST_PROMPT_LIMIT: "5", AI_GUEST_IP_DAILY_CAP: "3" });
+  const login = start(LOGIN_PORT, loginDbFile, { AI_GUEST_PROMPT_LIMIT: "" });
   try {
-    await waitUp(MAIN_PORT); await waitUp(CAP_PORT);
+    await waitUp(MAIN_PORT); await waitUp(CAP_PORT); await waitUp(LOGIN_PORT);
 
     const A = uuid(), B = uuid(), C = uuid();
 
@@ -219,9 +223,69 @@ async function check(name, fn) {
       const vc = await (await fetch(`http://127.0.0.1:${CAP_PORT}/auth/verify-code`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, code: rc.devCode }) })).json();
       assert.equal((await call(CAP_PORT, "parse-intent", { prompt: uuid(), token: vc.token })).status, 200);
     });
+
+    // ---- the default: the AI needs sign-in (no AI_GUEST_PROMPT_LIMIT set) ----
+    await check("DEFAULT: a guest is refused on all three AI routes, with a clear code, and no AI is called", async () => {
+      const before = aiCalls;
+      const phone = uuid();
+      for (const route of ["parse-intent", "ai", "route-info"]) {
+        const r = await call(LOGIN_PORT, route, { device: phone, prompt: uuid() });
+        assert.equal(r.status, 403, route);
+        assert.equal(r.body.code, "login_required", route);
+        assert.match(r.body.error, /Sign in/, route);
+      }
+      assert.equal(aiCalls, before, "no AI provider was called");
+    });
+
+    await check("DEFAULT: it makes no difference whether the guest sends a phone id, a made-up one, or none", async () => {
+      for (const device of [uuid(), "not-a-real-id", undefined]) {
+        assert.equal((await call(LOGIN_PORT, "parse-intent", { device })).status, 403);
+      }
+    });
+
+    await check("DEFAULT: repeating the call never gets through", async () => {
+      const phone = uuid();
+      for (let i = 0; i < 8; i++) assert.equal((await call(LOGIN_PORT, "parse-intent", { device: phone, prompt: uuid() })).status, 403, `call ${i + 1}`);
+    });
+
+    await check("DEFAULT: a bad or made-up sign-in token is just a guest", async () => {
+      assert.equal((await call(LOGIN_PORT, "parse-intent", { token: "not.a.token" })).status, 403);
+      const forged = [Buffer.from('{"alg":"none"}').toString("base64url"), Buffer.from('{"userId":1}').toString("base64url"), ""].join(".");
+      assert.equal((await call(LOGIN_PORT, "ai", { token: forged })).status, 403);
+    });
+
+    await check("DEFAULT: the access check tells a guest to sign in, and calls no AI", async () => {
+      const before = aiCalls;
+      assert.deepEqual((await access(LOGIN_PORT, { device: uuid() })).body, { signedIn: false, used: 0, limit: 0, remaining: 0 });
+      assert.equal(aiCalls, before);
+    });
+
+    await check("DEFAULT: a signed-in person can use all three AI routes, with no counter attached", async () => {
+      const email = `login-required-${process.pid}@example.test`;
+      const rc = await (await fetch(`http://127.0.0.1:${LOGIN_PORT}/auth/request-code`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email }) })).json();
+      assert.ok(rc.devCode, "development server hands back the code");
+      const vc = await (await fetch(`http://127.0.0.1:${LOGIN_PORT}/auth/verify-code`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, code: rc.devCode }) })).json();
+      assert.ok(vc.token);
+      const before = aiCalls;
+      for (const route of ["parse-intent", "ai", "route-info"]) {
+        const r = await call(LOGIN_PORT, route, { prompt: uuid(), token: vc.token });
+        assert.equal(r.status, 200, route);
+        assert.equal(r.body.guest, undefined, route);
+      }
+      assert.equal(aiCalls, before + 3);
+      assert.deepEqual((await access(LOGIN_PORT, { token: vc.token })).body, { signedIn: true });
+    });
+
+    await check("DEFAULT: everything that is not AI is still open to a guest", async () => {
+      for (const p of ["/health", "/places/search?q=jaipur", "/privacy", "/terms"]) {
+        const r = await fetch(`http://127.0.0.1:${LOGIN_PORT}${p}`);
+        assert.notEqual(r.status, 403, p);
+        assert.notEqual(r.status, 401, p);
+      }
+    });
   } finally {
-    main.kill(); cap.kill(); ai.close();
-    for (const f of [dbFile, capDbFile]) for (const suffix of ["", "-shm", "-wal"]) fs.rmSync(f + suffix, { force: true });
+    main.kill(); cap.kill(); login.kill(); ai.close();
+    for (const f of [dbFile, capDbFile, loginDbFile]) for (const suffix of ["", "-shm", "-wal"]) fs.rmSync(f + suffix, { force: true });
   }
   console.log(failed ? `\n${failed} of ${n} checks FAILED` : `\nall ${n} checks passed`);
   process.exit(failed ? 1 : 0);

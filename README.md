@@ -93,16 +93,13 @@ All three AI routes (`POST /plan-trip/ai`, `/plan-trip/route-info`, `/plan-trip/
 - The AI routes use `middleware/optionalAuth.js`, so they stay open to guests but personalise for signed-in users when the app sends its `Authorization: Bearer` token (see `journey-app/src/screens/PlanTrip/aiRequest.ts`).
 - Privacy: update the app's privacy policy to mention that signed-in users' AI requests are stored to personalise answers and can be deleted from Settings.
 
-## Free AI prompts for guests
+## AI needs sign-in
 
-Signing in is never required to use the app, but AI is what an account unlocks. The three AI routes also go through `aiGuestGate` (`src/middleware/aiGuestLimit.js`), after `optionalAuth`:
+Signing in is never required to use the app, but the AI is what an account unlocks. The three AI routes (`/plan-trip/ai`, `/route-info`, `/parse-intent`) go through `aiGuestGate` (`src/middleware/aiGuestLimit.js`), after `optionalAuth`:
 
 - **Signed in** (a valid token): not limited here.
-- **A guest** gets `AI_GUEST_PROMPT_LIMIT` free prompts (5 unless set). Past that the route answers `403 { code: "guest_limit" }` and the app offers sign-in. Nothing that is not AI is limited.
-- **One prompt** is one thing the person did: the app sends the same `X-AI-Prompt-Id` on every AI call that belongs to it (a trip with three stops makes three calls, still one prompt). A call with no id counts as its own prompt. A prompt that was already counted can always finish.
-- **Only answered calls count.** An AI outage never uses up free prompts.
-- **Whose count:** the phone's random id (`X-Device-Id`, made and kept by the app). A call without a valid one is counted against its network address, so an old app or a script cannot dodge the limit by leaving it out. A looser safety net, `AI_GUEST_IP_DAILY_CAP` (60 a day, in memory), answers `429 { code: "guest_ip_limit" }` when one address floods the guest AI.
-- `GET /plan-trip/ai-access` says how many free prompts this phone has left (no AI call). Successful guest answers also carry `guest: { used, limit, remaining }`.
-- The counts are in the `ai_guest_prompts` table. While the database is wiped on every restart (Render's free plan), counts start again after a restart: a few extra free prompts, nothing more.
-- `node scripts/test-ai-guest-limit.js` checks all of this against a throwaway copy of the server and a fake AI (18 checks).
-- The privacy policy (`src/legal/content.js`) says the random id and the count are kept; run `node scripts/export-legal-for-app.js` after changing it.
+- **A guest, by default:** refused. The route answers `403 { code: "login_required" }` before anything is counted or stored, and no AI provider is called. A bad or expired token counts as a guest. Nothing that is not AI (places, search, the rest of the app) is limited.
+- `GET /plan-trip/ai-access` says whether the caller can use AI (`{ signedIn: true }`, or `{ signedIn: false, used: 0, limit: 0, remaining: 0 }` for a guest). It calls no AI.
+- **Optional "free taste" mode:** set `AI_GUEST_PROMPT_LIMIT` to a number (say `5`) on the host and a guest gets that many free prompts before the route answers `403 { code: "guest_limit" }`. One prompt is one thing the person did (the app sends the same `X-AI-Prompt-Id` on every call that belongs to it); only answered calls count; the count is kept per phone (`X-Device-Id`) or per network address, with a daily per-address cap (`AI_GUEST_IP_DAILY_CAP`, default 60), in the `ai_guest_prompts` table. This mode is OFF unless you set the number, and the privacy policy and terms describe the OFF state: if you turn it on, update `src/legal/content.js` first (the random phone id and the count are then kept).
+- `node scripts/test-ai-guest-limit.js` checks both modes against a throwaway copy of the server and a fake AI.
+- After changing `src/legal/content.js`, run `node scripts/export-legal-for-app.js`.
