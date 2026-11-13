@@ -79,7 +79,7 @@ async function main() {
     assert.doesNotMatch(home, /Sign in with email|email sign-in/i);
     ok("the home page has a title and description, says what the app does, and links to the privacy policy, terms and account deletion");
     const privacy = await (await fetch(BASE + "/privacy")).text();
-    assert.match(privacy, /Last updated 26 October 2026/); assert.match(privacy, /do not sell your information/);
+    assert.ok(privacy.includes(`Last updated ${require("../src/legal/content").UPDATED}`), "the page shows the date from legal/content.js"); assert.match(privacy, /do not sell your information/);
     assert.match(privacy, /mailto:help@example\.test/);
     ok("the privacy policy is dated, says we do not sell data, and shows the support address when one is set");
     const fallback = await (await fetch(`http://localhost:${PORT_NO_MAIL}/privacy`)).text();
