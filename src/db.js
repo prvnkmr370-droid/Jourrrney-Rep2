@@ -95,4 +95,20 @@ for (const [column, type] of Object.entries(profileColumns)) {
   }
 }
 
+// Details collected when someone creates an account with their email (see routes/auth.js):
+// first and last name, and the moment they confirmed they are 18 or over. Accounts made
+// earlier, or through Google or Facebook, leave these empty.
+const accountColumns = { first_name: "TEXT", last_name: "TEXT", age_confirmed_at: "TEXT" };
+for (const [column, type] of Object.entries(accountColumns)) {
+  if (!existingColumns.has(column)) {
+    db.exec(`ALTER TABLE users ADD COLUMN ${column} ${type}`);
+  }
+}
+// The details typed on the sign-up form wait here, next to the emailed code, until the code is
+// confirmed: only then is the account made.
+const loginCodeColumns = new Set(db.prepare("PRAGMA table_info(login_codes)").all().map((c) => c.name));
+if (!loginCodeColumns.has("signup_json")) {
+  db.exec("ALTER TABLE login_codes ADD COLUMN signup_json TEXT");
+}
+
 module.exports = db;

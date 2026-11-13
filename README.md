@@ -27,6 +27,7 @@ Both need to be up for sign-in to work.
 - **Real**: the email → 6-digit-code flow is a genuine server-side
   challenge — the code is generated, hashed, and stored server-side, and
   wrong/expired codes are actually rejected. Sessions are real signed JWTs.
+- **Creating an account with email takes a name and an 18+ confirmation.** `POST /auth/request-code` has three modes (`mode` in the body): `"signin"` (the default) only works for an address that already has an account and otherwise answers `404 { code: "no_account" }`, sending nothing, so the app can offer to create one; `"signup"` needs `firstName`, `lastName` and `ageConfirmed: true` (names are tidied, letters/spaces/apostrophes/hyphens/full stops, up to 40 characters each; plain-words `400`s with `code: "invalid_signup"` or `"age_required"` and the `field`), and the typed details wait beside the emailed code until `POST /auth/verify-code` confirms it, which is the only place an account is ever made (first/last name and `age_confirmed_at` are stored); `"delete"` is what the public delete-account page uses. Typing the details for an address that already has an account just signs it in and overwrites nothing. Google and Facebook sign-ins create accounts as before (no age tick; their name only). `node scripts/test-email-flow.js` covers all of this.
 - **Email delivery is real once you configure a provider.** Set
   `RESEND_API_KEY` *or* `BREVO_API_KEY`, plus `EMAIL_FROM`, and
   `POST /auth/request-code` emails the code to the address the user typed

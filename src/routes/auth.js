@@ -50,24 +50,31 @@ function recent(map, key, windowMs, now) {
   return kept;
 }
 
-/** Returns an error message if this request is over a limit, else records it and returns null. */
-function throttle(email, ip) {
+/**
+ * Returns an error message if this request is over a limit, else records it and returns null.
+ * `countEmail: false` is for a request that sends no email (a sign-in for an address with no account):
+ * it still counts against the network address, so addresses cannot be probed in bulk, but it does not
+ * use up that email's wait, so the person can go straight on to create the account.
+ */
+function throttle(email, ip, { countEmail = true } = {}) {
   const now = Date.now();
   const byEmail = recent(emailRequests, email, HOUR_MS, now);
   const byIp = recent(ipRequests, ip, HOUR_MS, now);
 
-  const last = byEmail[byEmail.length - 1];
-  if (last && now - last < MIN_SECONDS_BETWEEN_CODES * 1000) {
-    const wait = Math.ceil((MIN_SECONDS_BETWEEN_CODES * 1000 - (now - last)) / 1000);
-    return `Please wait ${wait}s before asking for another code.`;
-  }
-  if (byEmail.length >= MAX_CODES_PER_EMAIL_PER_HOUR) {
-    return "Too many codes requested for this email — try again in an hour.";
+  if (countEmail) {
+    const last = byEmail[byEmail.length - 1];
+    if (last && now - last < MIN_SECONDS_BETWEEN_CODES * 1000) {
+      const wait = Math.ceil((MIN_SECONDS_BETWEEN_CODES * 1000 - (now - last)) / 1000);
+      return `Please wait ${wait}s before asking for another code.`;
+    }
+    if (byEmail.length >= MAX_CODES_PER_EMAIL_PER_HOUR) {
+      return "Too many codes requested for this email — try again in an hour.";
+    }
   }
   if (byIp.length >= MAX_CODES_PER_IP_PER_HOUR) {
     return "Too many requests from this device — try again in an hour.";
   }
-  byEmail.push(now);
+  if (countEmail) byEmail.push(now);
   byIp.push(now);
   return null;
 }
@@ -91,11 +98,51 @@ function isValidEmail(email) {
   return typeof email === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
-// POST /auth/request-code { email }
+const NAME_PATTERN = /^[\p{L}\p{M}][\p{L}\p{M} .'’-]*$/u;
+const MAX_NAME_LENGTH = 40;
+
+/** A first or last name from the sign-up form: { value } when fine, { error } in plain words when not. */
+function cleanName(raw, label) {
+  const value = String(raw ?? "").replace(/\s+/g, " ").trim();
+  if (!value) return { error: `Enter your ${label}.` };
+  if (value.length > MAX_NAME_LENGTH) return { error: `Your ${label} is too long. Please use ${MAX_NAME_LENGTH} letters or fewer.` };
+  if (!NAME_PATTERN.test(value)) return { error: `Your ${label} can only use letters, spaces, apostrophes, hyphens and full stops.` };
+  return { value };
+}
+
+const NO_ACCOUNT_ERROR = "There's no Jourrrney account for this email yet. Create one to continue.";
+
+/** What the app is told about a signed-in person. */
+const userPayload = (u) => ({ id: u.id, email: u.email, name: u.name, firstName: u.first_name ?? null, lastName: u.last_name ?? null });
+
+/**
+ * POST /auth/request-code { email, mode?, firstName?, lastName?, ageConfirmed? }
+ *
+ *   mode "signin" (the default, so an older app behaves as "sign in"): the address must already have an
+ *        account. If it has none the answer is 404 { code: "no_account" } and nothing is sent, so the app can
+ *        offer to create one. Accounts are NEVER created from a sign-in.
+ *   mode "signup": first name, last name and `ageConfirmed: true` (the person ticked "I am 18 or older") are
+ *        required. They wait next to the emailed code and the account is made only when the code is confirmed.
+ *        If the address already has an account this just signs that account in; nothing is overwritten.
+ *   mode "delete": the public delete-account page. Sends a code to any address, as before.
+ */
 router.post("/request-code", async (req, res) => {
   const email = String(req.body?.email || "").trim().toLowerCase();
   if (!isValidEmail(email)) {
     return res.status(400).json({ error: "Enter a valid email address." });
+  }
+  const mode = ["signup", "delete"].includes(req.body?.mode) ? req.body.mode : "signin";
+
+  let signup = null;
+  if (mode === "signup") {
+    const first = cleanName(req.body?.firstName, "first name");
+    if (first.error) return res.status(400).json({ code: "invalid_signup", field: "firstName", error: first.error });
+    const last = cleanName(req.body?.lastName, "last name");
+    if (last.error) return res.status(400).json({ code: "invalid_signup", field: "lastName", error: last.error });
+    if (req.body?.ageConfirmed !== true) {
+      return res.status(400).json({ code: "age_required", field: "ageConfirmed", error: "Please confirm that you are 18 or older to create an account." });
+    }
+    signup = { firstName: first.value, lastName: last.value, ageConfirmedAt: new Date().toISOString() };
   }
 
   const provider = configuredProvider();
@@ -107,17 +154,29 @@ router.post("/request-code", async (req, res) => {
     return res.status(503).json({ error: "Email sign-in isn't available right now. Please try again later." });
   }
 
+  const existing = db.prepare("SELECT id FROM users WHERE email = ?").get(email);
+  if (mode === "signin" && !existing) {
+    // Nothing is sent, so this does not use up the email's wait (the person goes straight on to create the
+    // account), but it still counts against the network address.
+    const tooMany = throttle(email, req.ip || "unknown", { countEmail: false });
+    if (tooMany) return res.status(429).json({ error: tooMany });
+    return res.status(404).json({ code: "no_account", error: NO_ACCOUNT_ERROR });
+  }
+
   const limited = throttle(email, req.ip || "unknown");
   if (limited) return res.status(429).json({ error: limited });
 
   const code = String(crypto.randomInt(0, 1000000)).padStart(6, "0");
   const expiresAt = new Date(Date.now() + CODE_TTL_MINUTES * 60_000).toISOString();
+  // The typed details are kept only if they will be used: for an address that already has an account the
+  // code just signs in, so they are dropped.
+  const signupJson = signup && !existing ? JSON.stringify(signup) : null;
 
   db.prepare(
-    `INSERT INTO login_codes (email, code_hash, expires_at, attempts)
-     VALUES (@email, @codeHash, @expiresAt, 0)
-     ON CONFLICT(email) DO UPDATE SET code_hash = @codeHash, expires_at = @expiresAt, attempts = 0`,
-  ).run({ email, codeHash: hashCode(code), expiresAt });
+    `INSERT INTO login_codes (email, code_hash, expires_at, attempts, signup_json)
+     VALUES (@email, @codeHash, @expiresAt, 0, @signupJson)
+     ON CONFLICT(email) DO UPDATE SET code_hash = @codeHash, expires_at = @expiresAt, attempts = 0, signup_json = @signupJson`,
+  ).run({ email, codeHash: hashCode(code), expiresAt, signupJson });
 
   if (provider) {
     try {
@@ -163,27 +222,33 @@ function consumeLoginCode(email, code) {
   }
 
   db.prepare("DELETE FROM login_codes WHERE email = ?").run(email);
-  return { ok: true };
+  let signup = null;
+  try { signup = row.signup_json ? JSON.parse(row.signup_json) : null; } catch { /* unreadable details: treated as none */ }
+  return { ok: true, signup };
 }
 
-// POST /auth/verify-code { email, code, name? }
+// POST /auth/verify-code { email, code }
+// Signs in the account for this address. An account is made here only when the code was asked for with the
+// sign-up details (name and the 18+ confirmation, see /request-code); a code asked for any other way cannot create one.
 router.post("/verify-code", (req, res) => {
   const email = String(req.body?.email || "").trim().toLowerCase();
   const code = String(req.body?.code || "").trim();
-  const name = req.body?.name ? String(req.body.name).trim().slice(0, 80) : null;
 
   const checked = consumeLoginCode(email, code);
   if (!checked.ok) return res.status(checked.status).json({ error: checked.error });
 
   let user = db.prepare("SELECT * FROM users WHERE email = ?").get(email);
   if (!user) {
+    if (!checked.signup) return res.status(400).json({ code: "no_account", error: NO_ACCOUNT_ERROR });
+    const { firstName, lastName, ageConfirmedAt } = checked.signup;
     const id = crypto.randomUUID();
-    db.prepare("INSERT INTO users (id, email, name) VALUES (?, ?, ?)").run(id, email, name);
+    db.prepare("INSERT INTO users (id, email, name, first_name, last_name, age_confirmed_at) VALUES (?, ?, ?, ?, ?, ?)")
+      .run(id, email, `${firstName} ${lastName}`, firstName, lastName, ageConfirmedAt);
     user = db.prepare("SELECT * FROM users WHERE id = ?").get(id);
   }
 
   const token = jwt.sign({ sub: user.id }, JWT_SECRET, { expiresIn: "30d" });
-  res.json({ token, user: { id: user.id, email: user.email, name: user.name } });
+  res.json({ token, user: userPayload(user) });
 });
 
 // POST /auth/google { idToken } — sign in/up with a Google-issued ID token
@@ -246,9 +311,9 @@ router.post("/delete-with-code", (req, res) => {
 
 // GET /auth/me — requires Authorization: Bearer <token>
 router.get("/me", requireAuth, (req, res) => {
-  const user = db.prepare("SELECT id, email, name, created_at FROM users WHERE id = ?").get(req.userId);
+  const user = db.prepare("SELECT id, email, name, first_name, last_name, created_at FROM users WHERE id = ?").get(req.userId);
   if (!user) return res.status(401).json({ error: "Account not found." });
-  res.json({ user });
+  res.json({ user: { ...userPayload(user), created_at: user.created_at } });
 });
 
 module.exports = router;

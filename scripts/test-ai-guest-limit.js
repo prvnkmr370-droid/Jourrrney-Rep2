@@ -177,7 +177,7 @@ async function check(name, fn) {
     let token;
     await check("someone can sign in (email code, development server)", async () => {
       const email = `limit-test-${process.pid}@example.test`;
-      const rc = await (await fetch(`http://127.0.0.1:${MAIN_PORT}/auth/request-code`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email }) })).json();
+      const rc = await (await fetch(`http://127.0.0.1:${MAIN_PORT}/auth/request-code`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, mode: "signup", firstName: "Test", lastName: "Person", ageConfirmed: true }) })).json();
       assert.ok(rc.devCode, "development server hands back the code");
       const vc = await (await fetch(`http://127.0.0.1:${MAIN_PORT}/auth/verify-code`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, code: rc.devCode }) })).json();
       assert.ok(vc.token);
@@ -219,7 +219,7 @@ async function check(name, fn) {
 
     await check("the network address cap does not apply to someone signed in", async () => {
       const email = `limit-test-cap-${process.pid}@example.test`;
-      const rc = await (await fetch(`http://127.0.0.1:${CAP_PORT}/auth/request-code`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email }) })).json();
+      const rc = await (await fetch(`http://127.0.0.1:${CAP_PORT}/auth/request-code`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, mode: "signup", firstName: "Test", lastName: "Person", ageConfirmed: true }) })).json();
       const vc = await (await fetch(`http://127.0.0.1:${CAP_PORT}/auth/verify-code`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, code: rc.devCode }) })).json();
       assert.equal((await call(CAP_PORT, "parse-intent", { prompt: uuid(), token: vc.token })).status, 200);
     });
@@ -262,7 +262,7 @@ async function check(name, fn) {
 
     await check("DEFAULT: a signed-in person can use all three AI routes, with no counter attached", async () => {
       const email = `login-required-${process.pid}@example.test`;
-      const rc = await (await fetch(`http://127.0.0.1:${LOGIN_PORT}/auth/request-code`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email }) })).json();
+      const rc = await (await fetch(`http://127.0.0.1:${LOGIN_PORT}/auth/request-code`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, mode: "signup", firstName: "Test", lastName: "Person", ageConfirmed: true }) })).json();
       assert.ok(rc.devCode, "development server hands back the code");
       const vc = await (await fetch(`http://127.0.0.1:${LOGIN_PORT}/auth/verify-code`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, code: rc.devCode }) })).json();
       assert.ok(vc.token);

@@ -35,7 +35,7 @@ const PRIVACY = {
         {
           list: [
             "You can use Jourrrney without an account.",
-            "If you sign in, we keep your email address and name so you can get back to your account.",
+            "If you create an account, we keep your email address and name so you can get back to your account. If you sign up with your email, we also keep the date you confirmed you are 18 or over.",
             "We do not sell your information, show ads, or use tracking or analytics tools.",
             "Tia's AI answers are for people who are signed in. When you are signed in, what you type to Tia is sent to AI services so they can write an answer.",
             "Without an account, nothing you type to Tia is sent to AI services.",
@@ -49,13 +49,15 @@ const PRIVACY = {
       body: [
         {
           list: [
-            "Your email address, and your name if you gave it to us or signed in with Facebook.",
+            "Your email address.",
+            "Your first and last name: you type them in when you create an account with your email, or Google or Facebook give them to us if you sign in with them.",
+            "If you create an account with your email: the date and time you confirmed that you are 18 or over.",
             "Details you choose to add to your profile: a short bio, languages, where you live, and whether you like the light or dark screen.",
             "A short history of your recent trip-planning questions and lookups (up to 100 notes), so Tia's answers can build on them. You can clear this any time in Settings.",
             "A scrambled copy of the sign-in code we email you. It cannot be read back, and it stops working after 10 minutes.",
           ],
         },
-        "If you sign in with Facebook, Facebook tells us your name and email address. We never see your Facebook password, your friends or your posts, and we never post anything for you.",
+        "If you sign in with Google or Facebook, they tell us your name and email address. We never see your password there, your friends, contacts or posts, and we never post anything for you.",
       ],
     },
     {
@@ -108,7 +110,7 @@ const PRIVACY = {
             "Render: hosts our server and our database, and keeps ordinary server logs (such as the time and internet address of a request) for a short time.",
             "Resend or Brevo: send you the sign-in code by email, so they see your email address.",
             "Google Gemini and Groq: the AI services described above.",
-            "Facebook (Meta): only if you choose Sign in with Facebook.",
+            "Google and Facebook (Meta): only if you choose to sign in with them.",
           ],
         },
         "We may also share information if the law requires it.",
@@ -195,13 +197,13 @@ const TERMS = {
     {
       heading: "Who can use Jourrrney",
       body: [
-        "Jourrrney is for people aged 18 and over. If you are under 18, please use it only together with a parent or guardian who has read these terms and agrees to them for you.",
+        "Jourrrney is for people aged 18 and over. If you are under 18, please use it only together with a parent or guardian who has read these terms and agrees to them for you. When you create an account with your email, we ask you to confirm that you are 18 or over.",
       ],
     },
     {
       heading: "Your account",
       body: [
-        "You can browse without an account. If you sign in, with an emailed code, with Google or with Facebook, you can get back to your account on any phone and use Tia's AI features, which are only for signed-in people.",
+        "You can browse without an account. If you sign in, with an emailed code, with Google or with Facebook, you can get back to your account on any phone and use Tia's AI features, which are only for signed-in people. To create an account with your email, you give us your first and last name and confirm that you are 18 or over.",
         "Use your own email address or your own Google or Facebook account, give us correct details, and keep your sign-in safe. You are responsible for what happens under your account, so tell us at once if you think someone else has got into it.",
         "One person, one account. Please do not make accounts for other people or share yours.",
         "You can delete your account at any time (the Privacy Policy explains how). Deleting it removes the information we keep about you and cannot be undone.",
@@ -367,7 +369,7 @@ const DATA = {
       body: [
         {
           list: [
-            "Email address and name: so you can sign in and get back to your account.",
+            "Email address, first name and last name: so you can sign in and get back to your account. If you sign up with your email we also keep the date you confirmed you are 18 or over.",
             "Bio, languages, where you live, light or dark screen: only if you add them, so they follow you to a new phone.",
             "Recent trip-planning questions (latest 100): so Tia's answers can build on what you asked before. You can clear them in Settings.",
             "A scrambled sign-in code: for 10 minutes, to check the code you type.",

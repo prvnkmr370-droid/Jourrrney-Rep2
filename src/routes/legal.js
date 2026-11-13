@@ -132,7 +132,7 @@ const DELETE_SCRIPT = `<script>
     email=$("email").value.trim();
     if(!email){say("msg1","Please enter your email address.",true);return}
     $("send").disabled=true;say("msg1","Sending the code...");
-    post("/auth/request-code",{email:email}).then(function(r){
+    post("/auth/request-code",{email:email,mode:"delete"}).then(function(r){
       $("send").disabled=false;
       if(!r.ok){say("msg1",r.data.error||fail,true);return}
       $("sentto").textContent=email;say("msg1","");say("msg2","");show(2);$("code").focus();

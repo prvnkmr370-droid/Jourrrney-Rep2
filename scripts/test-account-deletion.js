@@ -50,9 +50,10 @@ async function main() {
   const userRow = (email) => db.prepare("SELECT id FROM users WHERE email = ?").get(email);
   /** Real sign-in through the real routes. Uses this email's one code request. */
   async function signUp(email, name) {
-    const req = await json("POST", "/auth/request-code", { email });
+    const [firstName, ...rest] = String(name).split(" ");
+    const req = await json("POST", "/auth/request-code", { email, mode: "signup", firstName, lastName: rest.join(" ") || "Tester", ageConfirmed: true });
     assert.equal(req.status, 200);
-    const res = await json("POST", "/auth/verify-code", { email, code: req.data.devCode, name });
+    const res = await json("POST", "/auth/verify-code", { email, code: req.data.devCode });
     assert.equal(res.status, 200);
     return res.data; // { token, user }
   }
@@ -127,14 +128,14 @@ async function main() {
     assert.equal((await json("POST", "/auth/delete-with-code", { email: "not-an-email", code: "123456" })).status, 400);
     ok("a bad email address is refused");
 
-    const askBob = await json("POST", "/auth/request-code", { email: "bob@example.test" });
+    const askBob = await json("POST", "/auth/request-code", { email: "bob@example.test", mode: "delete" });
     const wrongCode = askBob.data.devCode === "111111" ? "222222" : "111111";
     const wrong = await json("POST", "/auth/delete-with-code", { email: "bob@example.test", code: wrongCode });
     assert.equal(wrong.status, 400); assert.match(wrong.data.error, /Incorrect/); assert.ok(userRow("bob@example.test"));
     ok("a wrong code deletes nothing");
 
     const daveId = seedAccount("dave@example.test");
-    const askDave = await json("POST", "/auth/request-code", { email: "dave@example.test" });
+    const askDave = await json("POST", "/auth/request-code", { email: "dave@example.test", mode: "delete" });
     for (let i = 0; i < 5; i++) await json("POST", "/auth/delete-with-code", { email: "dave@example.test", code: wrongCode });
     const locked = await json("POST", "/auth/delete-with-code", { email: "dave@example.test", code: askDave.data.devCode });
     assert.equal(locked.status, 429); assert.ok(userRow("dave@example.test")); assert.equal(memoryRows(daveId), 3);
@@ -148,7 +149,7 @@ async function main() {
     assert.ok(userRow("dave@example.test"));
     ok("Dave, who is a different person, was never touched");
 
-    const ghost = await json("POST", "/auth/request-code", { email: "nobody@example.test" });
+    const ghost = await json("POST", "/auth/request-code", { email: "nobody@example.test", mode: "delete" });
     const ghostDel = await json("POST", "/auth/delete-with-code", { email: "nobody@example.test", code: ghost.data.devCode });
     assert.equal(ghostDel.status, 404); assert.match(ghostDel.data.error, /Nothing was deleted/);
     ok("an address with no account gets a plain 'nothing was deleted' answer");

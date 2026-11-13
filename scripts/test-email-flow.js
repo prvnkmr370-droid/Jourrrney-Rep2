@@ -46,6 +46,13 @@ async function main() {
     return { status: r.status, json: await r.json() };
   };
   const codeFrom = (msg) => msg.body.subject.match(/^(\d{6}) /)[1];
+  const db = require("../src/db"); // the same throwaway file the routes use
+  /** The body of a "create an account" request: names, and the 18+ tick. */
+  const signup = (email, extra = {}) => ({ email, mode: "signup", firstName: "Tara", lastName: "Traveller", ageConfirmed: true, ...extra });
+  const getMe = async (token) => {
+    const r = await fetch(api + "/me", { headers: { Authorization: `Bearer ${token}` } });
+    return { status: r.status, json: await r.json() };
+  };
   let n = 0;
   const step = (name) => console.log(`ok ${++n} - ${name}`);
 
@@ -53,7 +60,7 @@ async function main() {
   process.env.NODE_ENV = "development";
   process.env.RESEND_API_KEY = "re_test_key";
   delete process.env.BREVO_API_KEY;
-  let r = await post("/request-code", { email: "Traveller@Example.test" });
+  let r = await post("/request-code", signup("Traveller@Example.test"));
   assert.equal(r.status, 200);
   assert.equal(r.json.ok, true);
   assert.equal(r.json.devCode, undefined, "devCode must not be returned when an email provider is configured");
@@ -73,7 +80,10 @@ async function main() {
   const ok = await post("/verify-code", { email: "traveller@example.test", code });
   assert.equal(ok.status, 200);
   assert.ok(ok.json.token && ok.json.user.email === "traveller@example.test");
-  step("emailed code verifies and returns a session token (wrong code rejected)");
+  assert.equal(ok.json.user.name, "Tara Traveller");
+  assert.equal(ok.json.user.firstName, "Tara");
+  assert.equal(ok.json.user.lastName, "Traveller");
+  step("emailed code verifies, creates the account with the typed name, and returns a session token (wrong code rejected)");
 
   // 3. Asking again straight away is throttled.
   r = await post("/request-code", { email: "traveller@example.test" });
@@ -83,7 +93,7 @@ async function main() {
 
   // 4. Provider rejects: 502, nothing left valid.
   providerStatus = 403;
-  r = await post("/request-code", { email: "fail@example.test" });
+  r = await post("/request-code", signup("fail@example.test"));
   assert.equal(r.status, 502);
   assert.ok(!JSON.stringify(r.json).includes("rejected by test provider"), "provider detail must not reach the app");
   providerStatus = 200;
@@ -96,7 +106,7 @@ async function main() {
   delete process.env.RESEND_API_KEY;
   process.env.BREVO_API_KEY = "xkeysib-test";
   const before = received.length;
-  r = await post("/request-code", { email: "brevo@example.test" });
+  r = await post("/request-code", signup("brevo@example.test"));
   assert.equal(r.status, 200);
   assert.equal(r.json.devCode, undefined);
   const m2 = received[before];
@@ -109,7 +119,7 @@ async function main() {
 
   // 6. No provider: dev echo outside production, 503 in production.
   delete process.env.BREVO_API_KEY;
-  r = await post("/request-code", { email: "dev@example.test" });
+  r = await post("/request-code", signup("dev@example.test"));
   assert.equal(r.status, 200);
   assert.match(r.json.devCode, /^\d{6}$/);
   step("no provider, development: devCode echoed as before");
@@ -139,6 +149,90 @@ async function main() {
   assert.equal(row, undefined, "no sign-in code is stored when nothing can be sent");
   delete process.env.RENDER;
   step("on Render with no provider, even with NODE_ENV=development: 503, no code returned, none logged, none stored");
+
+  // 6c. The sign-up rules: no account without a name and the 18+ tick, and a sign-in never makes one.
+  process.env.NODE_ENV = "development";
+  const countRows = (table, email) => db.prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE email = ?`).get(email).n;
+  const mailsBefore = received.length;
+
+  r = await post("/request-code", { email: "newcomer@example.test" });
+  assert.equal(r.status, 404);
+  assert.equal(r.json.code, "no_account");
+  assert.match(r.json.error, /no Jourrrney account/i);
+  assert.equal(countRows("login_codes", "newcomer@example.test"), 0, "no code is stored");
+  assert.equal(received.length, mailsBefore, "nothing is emailed");
+  step("signing in with an address that has no account: 404 no_account, nothing stored, nothing sent");
+
+  r = await post("/request-code", signup("newcomer@example.test", { firstName: "Nia", lastName: "Newcomer" }));
+  assert.equal(r.status, 200, "the person can go straight on to create the account (the 404 did not use up the wait)");
+  const newcomerCode = r.json.devCode;
+  assert.match(newcomerCode, /^\d{6}$/);
+  const created = await post("/verify-code", { email: "newcomer@example.test", code: newcomerCode });
+  assert.equal(created.status, 200);
+  assert.equal(created.json.user.name, "Nia Newcomer");
+  step("creating the account straight after that works, and the account is made only when the code is confirmed");
+
+  const bad = [
+    [{ firstName: "" }, "invalid_signup", "firstName"],
+    [{ firstName: "   " }, "invalid_signup", "firstName"],
+    [{ firstName: "R2D2" }, "invalid_signup", "firstName"],
+    [{ firstName: "A".repeat(41) }, "invalid_signup", "firstName"],
+    [{ lastName: "" }, "invalid_signup", "lastName"],
+    [{ lastName: "Smith <script>" }, "invalid_signup", "lastName"],
+    [{ ageConfirmed: false }, "age_required", "ageConfirmed"],
+    [{ ageConfirmed: "true" }, "age_required", "ageConfirmed"],
+    [{ ageConfirmed: undefined }, "age_required", "ageConfirmed"],
+  ];
+  for (const [extra, code, field] of bad) {
+    const email = `bad-${Math.random().toString(36).slice(2, 8)}@example.test`;
+    r = await post("/request-code", signup(email, extra));
+    assert.equal(r.status, 400, JSON.stringify(extra));
+    assert.equal(r.json.code, code, JSON.stringify(extra));
+    assert.equal(r.json.field, field, JSON.stringify(extra));
+    assert.ok(r.json.error && !/undefined|\[object/.test(r.json.error), "a plain-words message");
+    assert.equal(countRows("login_codes", email), 0, "nothing stored");
+  }
+  assert.equal(received.length, mailsBefore, "no email for a refused sign-up");
+  step("an account request without a first name, a last name or the 18+ tick is refused with a plain message and stores nothing");
+
+  r = await post("/request-code", signup("tidy@example.test", { firstName: "  Asha   Maria ", lastName: "  O'Neil-Müller " }));
+  assert.equal(r.status, 200);
+  const tidy = await post("/verify-code", { email: "tidy@example.test", code: r.json.devCode });
+  assert.equal(tidy.json.user.firstName, "Asha Maria");
+  assert.equal(tidy.json.user.lastName, "O'Neil-Müller");
+  assert.equal(tidy.json.user.name, "Asha Maria O'Neil-Müller");
+  const tidyRow = db.prepare("SELECT first_name, last_name, age_confirmed_at FROM users WHERE email = ?").get("tidy@example.test");
+  assert.equal(tidyRow.first_name, "Asha Maria");
+  assert.ok(Math.abs(Date.now() - new Date(tidyRow.age_confirmed_at).getTime()) < 60_000, "the 18+ confirmation is stored with the time it was given");
+  const me = await getMe(tidy.json.token);
+  assert.equal(me.status, 200);
+  assert.equal(me.json.user.firstName, "Asha Maria");
+  assert.equal(me.json.user.lastName, "O'Neil-Müller");
+  step("names are tidied (extra spaces, accents and apostrophes kept), the 18+ confirmation time is stored, and /me returns the names");
+
+  const replay = await post("/verify-code", { email: "tidy@example.test", code: r.json.devCode });
+  assert.equal(replay.status, 400);
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM users WHERE email = ?").get("tidy@example.test").n, 1);
+  step("the same code cannot be used twice, and makes only one account");
+
+  const oldId = "11111111-1111-4111-8111-111111111111";
+  db.prepare("INSERT INTO users (id, email, name) VALUES (?, ?, ?)").run(oldId, "veteran@example.test", "Vera Veteran");
+  r = await post("/request-code", signup("veteran@example.test", { firstName: "Someone", lastName: "Else" }));
+  assert.equal(r.status, 200, "an address that already has an account just signs in");
+  assert.equal(db.prepare("SELECT signup_json FROM login_codes WHERE email = ?").get("veteran@example.test").signup_json, null, "the typed details are not kept");
+  const back = await post("/verify-code", { email: "veteran@example.test", code: r.json.devCode });
+  assert.equal(back.json.user.id, oldId);
+  assert.equal(back.json.user.name, "Vera Veteran", "the existing name is not overwritten");
+  assert.equal(back.json.user.firstName, null);
+  step("'creating' an account for an address that already has one signs that account in and overwrites nothing");
+
+  r = await post("/request-code", { email: "ghost@example.test", mode: "delete" });
+  assert.equal(r.status, 200, "the delete-account page can still ask for a code");
+  const ghost = await post("/verify-code", { email: "ghost@example.test", code: r.json.devCode });
+  assert.equal(ghost.status, 400);
+  assert.equal(ghost.json.code, "no_account");
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM users WHERE email = ?").get("ghost@example.test").n, 0);
+  step("a code asked for any way other than creating an account can never create one");
 
   // 7. Bad address.
   r = await post("/request-code", { email: "not-an-email" });
