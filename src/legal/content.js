@@ -75,6 +75,13 @@ const PRIVACY = {
       ],
     },
     {
+      heading: "Reporting an AI reply",
+      body: [
+        "Under each reply from Tia that the AI wrote, and next to an AI-written trip plan, there is a Report button. If you use it, we receive the text you are reporting, the question you had asked just before (up to 500 characters), the reason you chose, any note you add, and your account, so we can look into it and write back if needed.",
+        "We keep a report with your account until you delete it. We also get a copy by email, and we delete that copy once the report has been dealt with.",
+      ],
+    },
+    {
       heading: "Your location",
       body: [
         "Jourrrney only uses your location if you allow it, and only to suggest a starting city or show where you are on a map. Your phone's own maps service turns your position into a place name. We do not store your location on our servers, and you can switch it off at any time in your phone's settings.",
@@ -108,7 +115,7 @@ const PRIVACY = {
         {
           list: [
             "Render: hosts our server and our database, and keeps ordinary server logs (such as the time and internet address of a request) for a short time.",
-            "Resend or Brevo: send you the sign-in code by email, so they see your email address.",
+            "Resend or Brevo: send you the sign-in code by email, and email us a copy of any report you send, so they see your email address and the report text.",
             "Google Gemini and Groq: the AI services described above.",
             "Google and Facebook (Meta): only if you choose to sign in with them.",
           ],
@@ -132,7 +139,7 @@ const PRIVACY = {
             "Without the app: go to the Delete account page on our website, enter your email address and the code we send you.",
           ],
         },
-        "Deleting removes your email address, name, profile details and AI history from our database straight away. We do not keep a copy. It cannot be undone. Anything saved only on your phone stays there until you remove the app.",
+        "Deleting removes your email address, name, profile details, AI history and any reports you sent from our database straight away. We do not keep a copy. It cannot be undone. Anything saved only on your phone stays there until you remove the app.",
       ],
     },
     {
@@ -222,7 +229,7 @@ const TERMS = {
         "Tia's replies are written by AI services run by other companies (the Privacy Policy names them). They can be wrong, incomplete, out of date or not right for you. Treat them as ideas to check, not as facts or professional advice.",
         "Please do not rely on Tia for decisions about your safety, health, money or legal matters. Check with official sources, the places themselves, or a qualified person.",
         "Your messages and, if you choose, photos are sent to those AI services to produce a reply, as the Privacy Policy explains. Please do not type private details such as passwords, bank details or ID numbers.",
-        "If a reply is wrong, unsafe or offensive, please tell us using the contact below so we can look into it.",
+        "If a reply or a plan is wrong, unsafe or offensive, please tap the Report button next to it in the app so we can look into it. You can also tell us using the contact below.",
       ],
     },
     {
@@ -373,6 +380,7 @@ const DATA = {
             "Bio, languages, where you live, light or dark screen: only if you add them, so they follow you to a new phone.",
             "Recent trip-planning questions (latest 100): so Tia's answers can build on what you asked before. You can clear them in Settings.",
             "A scrambled sign-in code: for 10 minutes, to check the code you type.",
+            "Reports you send about an AI reply or plan: the reported text, your note and the reason, so we can look into them. We also get a copy by email.",
           ],
         },
       ],

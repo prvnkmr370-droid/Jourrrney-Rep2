@@ -9,6 +9,8 @@ const placesRoutes = require("./routes/places");
 const planTripRoutes = require("./routes/planTrip");
 const aiMemoryRoutes = require("./routes/aiMemory");
 const legalRoutes = require("./routes/legal");
+const reportsRoutes = require("./routes/reports");
+const db = require("./db");
 
 const app = express();
 // Render (and most hosts) put a proxy in front: trust one hop so req.ip is the
@@ -23,6 +25,14 @@ app.use(cors());
 app.use(express.json({ limit: "8mb" }));
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
+// Has the database survived restarts? createdAt is when the database file was first made and serverStarts how many
+// times a server has started on it. After a restart or deploy, createdAt must be unchanged and serverStarts higher;
+// "just now" and 1 mean the file was thrown away (temporary storage). pathConfigured is false on the default path.
+// Holds no personal data.
+app.get("/health/database", (_req, res) => {
+  const read = (key) => db.prepare("SELECT value FROM meta WHERE key = ?").get(key)?.value ?? null;
+  res.json({ createdAt: read("created_at"), serverStarts: Number(read("server_starts")) || 0, pathConfigured: !!process.env.SQLITE_PATH });
+});
 // Public web pages the app stores need: /privacy, /terms, /delete-account.
 app.use(legalRoutes);
 app.use("/auth/facebook", facebookAuthRoutes);
@@ -34,6 +44,7 @@ app.use("/profile", profileRoutes);
 app.use("/places", placesRoutes);
 app.use("/plan-trip", planTripRoutes);
 app.use("/ai-memory", aiMemoryRoutes);
+app.use("/reports", reportsRoutes);
 
 const PORT = process.env.PORT || 4000;
 // Bind to 0.0.0.0, not just localhost — the Expo Go app on your phone

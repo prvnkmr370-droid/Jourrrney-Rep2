@@ -93,4 +93,19 @@ async function sendLoginCode(to, code, ttlMinutes) {
   );
 }
 
-module.exports = { configuredProvider, sendLoginCode, parseFrom };
+/** Sends a plain-text notice (for example "an AI reply was reported") to an address we run. Throws on any failure. */
+async function sendNotice(to, subject, text) {
+  const provider = configuredProvider();
+  if (!provider) throw new Error("no email provider configured");
+  const from = process.env.EMAIL_FROM;
+  if (!from) throw new Error("EMAIL_FROM is not set");
+
+  if (provider === "resend") {
+    await postJson(RESEND_URL, { Authorization: `Bearer ${process.env.RESEND_API_KEY}` }, { from, to: [to], subject, text });
+    return;
+  }
+  const sender = parseFrom(from);
+  await postJson(BREVO_URL, { "api-key": process.env.BREVO_API_KEY }, { sender: { name: sender.name, email: sender.email }, to: [{ email: to }], subject, textContent: text });
+}
+
+module.exports = { configuredProvider, sendLoginCode, sendNotice, parseFrom };

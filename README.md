@@ -73,16 +73,29 @@ Deployed on [Render](https://render.com) via `render.yaml` (a "Blueprint" —
 Render reads this file and configures the service automatically). See the
 walkthrough that came with this change for the exact steps.
 
-**Known limitation on Render's free tier: the SQLite file (`data.sqlite`)
-does not survive a redeploy.** Free web services there don't include
-persistent disk storage, so every account created lives only until the
-next deploy or restart wipes the container's filesystem. Fine for
-continuing to test the deploy pipeline and the auth flow itself; not fine
-for real users who expect their account to still exist next week. Fixing
-that means either paying for Render's persistent disk add-on, or swapping
-SQLite for a real hosted database (Render/Supabase/Neon all have free
-Postgres tiers) — ask to do that whenever you're ready to move past
-testing.
+## Keeping the database across restarts (Render)
+
+**By default, on Render the SQLite file lives on temporary storage that is wiped on every restart and every deploy, and every account goes with it.** Free web services can't have a disk. The server warns about this in its logs at every start (`[db] WARNING: running on Render without SQLITE_PATH ...`). To keep the data:
+
+1. **Instance type:** change the web service from Free to a paid type (Starter, about $7 a month). That also stops it sleeping when idle.
+2. **Disk:** on the service, open **Disk** and click **Add disk**. Mount path `/var/data`, size `1` GB (about $0.25 a month; it can be made bigger later, never smaller). Render deploys when the disk is added.
+3. **Setting:** on **Environment**, add `SQLITE_PATH` = `/var/data/data.sqlite` and choose **Save and deploy**. Without this the server keeps writing to temporary storage even with a disk attached.
+4. **Check it:** open `https://<your-service>/health/database`. It shows `createdAt` (when the database file was first made), `serverStarts` (how many times a server has started on it) and `pathConfigured`. After the *next* deploy or restart, `createdAt` must be unchanged and `serverStarts` one higher. If `createdAt` is "just now" and `serverStarts` is 1 after a restart, the file was thrown away; `pathConfigured: false` means `SQLITE_PATH` isn't set.
+
+What a disk means: it is attached to one instance only (no scaling out); a deploy stops the old instance before the new one starts, so there are a few seconds of downtime; Render takes a snapshot of the disk every 24 hours and keeps seven days, and a restore replaces the whole disk. Prices are from Render's pricing page and can change.
+
+**This service is managed by a Blueprint (the `render.yaml` in this repo), so make the change there, not only in the dashboard: Render re-applies `render.yaml` on every sync and could undo a dashboard-only change.** `render.yaml` keeps the free plan and has the paid settings (`plan: starter`, a 1 GB `disk` at `/var/data`, `SQLITE_PATH`) written out as a comment; uncommenting them and pushing starts the billing, so do it only once the cost is approved.
+
+`node scripts/test-database-persistence.js` proves on your own machine that an account survives a restart (it stops the server, starts a new one on the same file, and checks the account and `/health/database`).
+
+## Reporting an AI reply
+
+Google Play requires an in-app way to report offensive or harmful AI output. The app shows a **Report** button under each AI-written reply from Tia and next to an AI-written trip plan; it opens a small sheet (reason, optional note) and calls `POST /reports` (`src/routes/reports.js`):
+
+- Signed in only (AI is for signed-in people). Body: `kind` (`chat_reply` | `trip_plan`), `reason` (`wrong` | `unsafe` | `offensive` | `other`), `content` (the reported text, 4000 characters at most), optional `comment` and `context` (500 each). At most 20 reports a person a day.
+- It is stored in `ai_reports` (removed with the account) **and a copy is emailed to `SUPPORT_EMAIL`** through the connected email service. **Set `SUPPORT_EMAIL` on Render**: on the free plan the database is wiped on every restart, so the email is the copy that lasts. Without it a report is stored but nobody is told.
+- The log line is `[report] #id kind reason`, never the text. `node scripts/test-reports.js` checks all of this.
+- The privacy policy and terms describe the button (what is sent and kept); run `node scripts/export-legal-for-app.js` after changing `src/legal/content.js`.
 
 ## AI response rules and per-user memory
 

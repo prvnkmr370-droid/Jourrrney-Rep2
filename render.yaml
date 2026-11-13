@@ -3,6 +3,15 @@ services:
     name: jourrrney-backend
     runtime: node
     plan: free
+    # DATABASE: on this free plan the SQLite file is wiped on every restart and deploy (all accounts lost).
+    # To keep it, change this to a paid plan (e.g. starter, $7 a month) and add, under this service:
+    #   disk:
+    #     name: journey-data
+    #     mountPath: /var/data
+    #     sizeGB: 1                      # $0.25 per GB a month
+    # plus an env var  SQLITE_PATH = /var/data/data.sqlite  (see README.md, "Keeping the database across restarts").
+    # NOT switched on, on purpose: this service is managed by a Render Blueprint, so syncing this file would
+    # start the billing automatically. Only do it when the cost has been approved.
     buildCommand: npm install
     startCommand: npm start
     envVars:

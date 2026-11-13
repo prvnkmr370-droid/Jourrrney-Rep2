@@ -1,9 +1,10 @@
 /**
  * Deleting an account. Google Play (and Apple) require that anyone who can
  * create an account in the app can also delete it, together with the data tied
- * to it. Everything the server keeps about a person lives in three places:
- * their row in `users`, their `ai_memory` notes, and any sign-in code still
- * waiting for their email. All three go in one transaction, so a failure
+ * to it. Everything the server keeps about a person lives in four places:
+ * their row in `users`, their `ai_memory` notes, the reports they sent
+ * (`ai_reports`), and any sign-in code still waiting for their email. All of
+ * them go in one transaction, so a failure
  * leaves the account whole rather than half deleted.
  *
  * Their sign-in token (a 30-day JWT) cannot be taken back from the phone, so
@@ -17,6 +18,7 @@ const findByEmail = db.prepare("SELECT id, email FROM users WHERE email = ?");
 
 const removeEverything = db.transaction((user) => {
   db.prepare("DELETE FROM ai_memory WHERE user_id = ?").run(user.id);
+  db.prepare("DELETE FROM ai_reports WHERE user_id = ?").run(user.id);
   db.prepare("DELETE FROM login_codes WHERE email = ?").run(user.email);
   db.prepare("DELETE FROM users WHERE id = ?").run(user.id);
 });
