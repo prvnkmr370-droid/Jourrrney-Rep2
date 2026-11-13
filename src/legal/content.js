@@ -17,7 +17,7 @@
  * comes from SUPPORT_EMAIL) and a pointer to the Google Play page in the app.
  */
 
-const UPDATED = "12 November 2026";
+const UPDATED = "13 November 2026";
 
 // Two optional facts about the owner, used by the Terms below. Leave them empty and the Terms use general wording
 // that is still correct; fill them in and the same sentences name them.
@@ -167,6 +167,7 @@ const TERMS = {
             "Jourrrney is free to use, and you can use most of it without an account.",
             "Tia's replies are written by AI and can be wrong. Check the important details before you travel.",
             "Comfort Index scores, safety tips and emergency information are general guidance, not a promise. Jourrrney is not an emergency service.",
+            "Jourrrney does not take bookings or payments. A stay you book is with the property or the site you use, not with us.",
             "Tia's AI features are for people who are signed in. Everything else works without an account.",
             "Please do not misuse the app or use it to harm others.",
             "You can delete your account whenever you like.",
@@ -229,6 +230,18 @@ const TERMS = {
         "Jourrrney is not an emergency service. It does not call for help or contact anyone for you. In an emergency, call your local emergency number (112 in India).",
         "Prices, timings, distances, weather, transport and opening hours are approximate and can be out of date. Check the important details, such as bookings, entry rules, permits and opening times, before you travel.",
         "You are responsible for your own travel decisions, and for following local laws and the rules of the places you visit.",
+      ],
+    },
+    {
+      heading: "Places to stay",
+      body: [
+        "Jourrrney shows places to stay to help you plan. We are not a hotel or a travel agent, and we do not take bookings or payments for accommodation.",
+        "If you book a stay, your agreement is with the property or the booking site you use, not with Jourrrney. We are not responsible for the stay, or for what the property or the site does, including prices, availability, cancellations, refunds, check-in, safety and the condition of the room.",
+        "What we show about a place to stay, such as its name, area, level, price range and other details, comes from the property, public sources or our own travel guide. Price ranges are typical prices to help you budget. They are not offers. The price on the property's or booking site's own page when you book is the price you pay, and taxes and fees may be extra.",
+        "Details change. Before you book or pay, check the property's own information, including its cancellation and refund rules, what is included, its house rules, and any age, ID or accessibility requirements.",
+        "A place appearing in Jourrrney is not an endorsement. We do not inspect properties. Labels such as Budget, Mid-range and Luxury describe a general price level. They are not official star ratings, and they are not a promise of quality or safety.",
+        "If we earn money from a link to a place to stay, for example if a partner pays us when you book through it, we will say so next to the link, and it will not cost you more. We will not let a property pay to change its price level or its place in our lists unless we clearly mark it as an advertisement.",
+        "If you own or run a place that appears in Jourrrney and something about it is wrong, or you would like it changed or removed, email us using the contact below with the name of the place and what should change. We will look into it quickly.",
       ],
     },
     {
